@@ -57,11 +57,12 @@ dsh --profile web --port 3099
 
 | 日期 | 验收项 | 结果 | 证据 |
 |---|---|---|---|
-| | 静态（npm test） | | |
-| | 可见性（7 模式列出） | | |
-| | 能力边界（工具矩阵核对） | | |
-| | 按模式配模型（负向证明） | | |
-| | 差异化 tier 路由（负向证明） | | |
-| | 自带模式兼容 | | |
-| | 合规 | | |
+| 2026-08-23 | 静态（npm test） | ✅ 39/39 通过 | packages/omo-dsh，vitest（omo-mode 12 / omo-task 20 / sync CLI 7） |
+| 2026-08-23 | 可见性（7 模式列出） | ✅ 全部列出、无 broken | agentPreset.list：omo-executor/architect/planner/reviewer/explorer/librarian/chat（user 信任）与 standard/code(PTC)/minimal/cordis 并列 |
+| 2026-08-23 | 能力边界（工具矩阵核对） | ✅ 与组合一致 | omo-chat 会话 request/header 工具清单恰为 ask_user_question/todo_write/web_search（无 pwsh/read/write/edit）；omo-executor 为全量 24 工具含 omo_task |
+| 2026-08-23 | 按模式配模型（负向证明） | ✅ 路由生效 | omo-chat 模型 pin 为 __omo_accept_nonexistent__ 后：request/header 记录该模型、persona {{model}} 渲染同名、DeepSeek API 报错点名该 id；恢复配置 |
+| 2026-08-23 | 差异化 tier 路由（负向证明） | ✅ 两档独立路由 | planner（顶层 v4-pro）内：tier=investigate 子代理 header=__omo_tier_investigate__ 且报错点名；tier=review 子代理 header=__omo_tier_review__ 且报错点名；executor 的 omo_task 描述枚举 fast(v4-flash)/deep(v4-pro) |
+| 2026-08-23 | 自带模式兼容 | ✅ 不受影响 | standard 会话正常完成（1+1=2），其模型为会话选择（v4-pro/max）；四随附 preset 无 broken；sync 对非管理目录零操作（hash 对比 + conflict 保护实测） |
+| 2026-08-23 | 合规 | ✅ | git remote -v 为空；git log 均为本仓库提交；ATTRIBUTION/LICENSE 齐全；persona 文本原创 |
+| | | | |
 

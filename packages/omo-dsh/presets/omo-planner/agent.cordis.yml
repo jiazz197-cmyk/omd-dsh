@@ -73,16 +73,12 @@
             hint: cheap and fast — content investigation, searching, summarising
             persona: >-
               You are a CONTENT INVESTIGATOR subagent (内容调查员): investigate the assigned topic by reading and searching; report findings precisely with sources.
-            toolFilter:
-              deny: [write, edit, pwsh, bash, str_replace_editor]
           review:
             provider: deepseek-official
             model: deepseek-v4-pro
             hint: strong reasoning — critical review of plans and designs
             persona: >-
               You are a PLAN REVIEWER subagent (方案评审员): critically review the assigned plan or design; list defects, risks and missing edge cases precisely.
-            toolFilter:
-              deny: [write, edit, pwsh, bash, str_replace_editor]
 
 - id: tool-ask-user
   name: '@deepseek-ai/dsh-tool-ask-user'

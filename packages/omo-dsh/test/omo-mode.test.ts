@@ -19,9 +19,10 @@ function fakeCtx(scope: any = { key: "preset-test" }) {
 }
 
 /** Simulate cordis waterfall: listeners run outermost-first; each receives next(). */
-async function simulate(listeners: Listener[], payload: any, inner: (payload: any) => Promise<any>) {
+async function simulate(listeners: Listener[], payload: any, inner: (payload: any) => Promise<any>, arity = 1) {
   const cbs = [...listeners];
-  const args: any[] = [payload, {}];
+  // 真实事件声明参数个数：agent/request = 1 (payload)；system-prompt/assemble = 2 (assembly, context)
+  const args: any[] = arity === 1 ? [payload] : [payload, {}];
   const next: any = () => {
     const hook = cbs.shift();
     const fn = hook !== undefined ? hook.cb : inner;
@@ -73,7 +74,7 @@ describe("omo-mode apply", () => {
       return { ...a, variables: { ...a.variables, provider: "session-provider", model: "session-model" } };
     };
     const composed = [...listeners["system-prompt/assemble"], { cb: entryAssemble, opts: {} }];
-    const result = await simulate(composed, { variables: { cwd: "/x" } }, async (a) => a);
+    const result = await simulate(composed, { variables: { cwd: "/x" } }, async (a) => a, 2);
     expect(result.variables.provider).toBe("deepseek-official");
     expect(result.variables.model).toBe("deepseek-v4-pro");
     expect(result.variables.cwd).toBe("/x");
@@ -82,7 +83,7 @@ describe("omo-mode apply", () => {
   it("overrides provider/model on agent/request and clears inherited reasoningEffort", async () => {
     const { ctx, listeners } = fakeCtx();
     apply(ctx, validConfig as any);
-    const entryRequest = async (payload: any, _ctx: any, next: any) => {
+    const entryRequest = async (payload: any, next: any) => {
       const r = await next();
       return { ...r, provider: "session-provider", model: "session-model", reasoningEffort: "high" };
     };
@@ -97,15 +98,43 @@ describe("omo-mode apply", () => {
   it("keeps a configured reasoningEffort", async () => {
     const { ctx, listeners } = fakeCtx();
     apply(ctx, { ...validConfig, reasoningEffort: "max" } as any);
-    const composed = [...listeners["agent/request"], { cb: async (p: any, _c: any, next: any) => (await next()), opts: {} }];
+    const composed = [...listeners["agent/request"], { cb: async (p: any, next: any) => (await next()), opts: {} }];
     const result = await simulate(composed, {}, async () => ({ provider: "p", model: "m", reasoningEffort: "low" }));
     expect(result.reasoningEffort).toBe("max");
+  });
+
+  it("passes through for subagents so omo-task tier models win", async () => {
+    const { ctx, listeners } = fakeCtx();
+    apply(ctx, validConfig as any);
+    const requestListener = listeners["agent/request"][0];
+    const payload = { agent: { options: { subagentDepth: 1, provider: "deepseek-official", model: "tier-model" } }, turn: 1, step: 1, signal: undefined };
+    const result = await requestListener.cb(payload, async () => ({ provider: "deepseek-official", model: "tier-model", maxTokens: 64 }));
+    expect(result.provider).toBe("deepseek-official");
+    expect(result.model).toBe("tier-model");
+  });
+
+  it("passes through in assemble for subagents (variables stay agent-owned)", async () => {
+    const { ctx, listeners } = fakeCtx();
+    apply(ctx, validConfig as any);
+    const assembleListener = listeners["system-prompt/assemble"][0];
+    const context = { agent: { options: { subagentDepth: 1 } } };
+    const result = await assembleListener.cb({ variables: { model: "tier-model" } }, context, async () => ({ variables: { model: "tier-model" } }));
+    expect(result.variables.model).toBe("tier-model");
+  });
+
+  it("still overrides for top-level agents (subagentDepth absent)", async () => {
+    const { ctx, listeners } = fakeCtx();
+    apply(ctx, validConfig as any);
+    const requestListener = listeners["agent/request"][0];
+    const payload = { agent: { options: {} }, turn: 1, step: 1, signal: undefined };
+    const result = await requestListener.cb(payload, async () => ({ provider: "entry", model: "entry-model" }));
+    expect(result.model).toBe("deepseek-v4-pro");
   });
 
   it("passes everything through when provider/model are not configured", async () => {
     const { ctx, listeners } = fakeCtx();
     apply(ctx, { mode: "chat" } as any);
-    const composed = [...listeners["agent/request"], { cb: async (p: any, _c: any, next: any) => (await next()), opts: {} }];
+    const composed = [...listeners["agent/request"], { cb: async (p: any, next: any) => (await next()), opts: {} }];
     const result = await simulate(composed, {}, async () => ({ provider: "session-provider", model: "session-model", reasoningEffort: "high" }));
     expect(result.provider).toBe("session-provider");
     expect(result.model).toBe("session-model");
