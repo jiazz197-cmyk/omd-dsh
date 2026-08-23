@@ -1,0 +1,3 @@
+name: OMO · 规划访谈
+description: 规划模式：DSH 原生 plan-mode + 只读工具边界；顶层规划用强模型，内容调查与方案评审委派给 omo_task tiers（强模型顶层、性价比模型重复工作）。
+order: 103
