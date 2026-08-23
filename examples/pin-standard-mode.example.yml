@@ -1,0 +1,35 @@
+# 配方：给「标准模式」的副本固定模型 + 加差异化委派
+#
+# 步骤：
+#   1. 复制随附 standard preset 到用户根：
+#      cp -r <dsh 安装目录>/config/agent-presets/standard <DSH_HOME>/.agent-presets/std-pinned
+#      （或直接在 DSH UI 里复制 preset）
+#   2. 编辑 std-pinned/agent.cordis.yml：在 persona 行之后追加下面两个行块，
+#      并把 preset.yml 的 name 改为「标准模式 (Pinned)」以区分。
+#   3. 下一会话生效；换模型改 config 即可。
+#
+# ── 固定模型 ──
+- id: omo-mode
+  name: '../.omo-vendor/omo-mode.mjs'
+  config:
+    mode: std-pinned
+    provider: deepseek-official
+    model: deepseek-v4-pro
+
+# ── 差异化委派（可选；需 std-pinned 已挂 tool-subagent-control/list-agents 等委派行）──
+- id: omo-task
+  name: '../.omo-vendor/omo-task.mjs'
+  config:
+    provider: spawn
+    toolName: omo_task
+    backgroundMode: continuable
+    tiers:
+      fast:
+        provider: deepseek-official
+        model: deepseek-v4-flash
+        hint: cheap and fast — repetitive investigation, searching, summarising
+      deep:
+        provider: deepseek-official
+        model: deepseek-v4-pro
+        hint: strong reasoning — hard problems, architecture
+
