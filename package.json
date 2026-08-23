@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "OMD 理念在 DeepSeek Harness 上的插件式迁移：模式能力边界 + 按模式配模型 + 同模式差异化子代理调用",
+  "author": "Carl Jia <jiazz197@gmail.com>",
   "workspaces": [
     "packages/*"
   ],
