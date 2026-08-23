@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npm run build --workspace @subagent-router/omd-dsh",
     "test": "npm run test --workspace @subagent-router/omd-dsh",
-    "pack": "npm run pack --workspace @subagent-router/omd-dsh"
+    "pack": "npm pack --workspace @subagent-router/omd-dsh"
   },
   "license": "MIT"
 }
