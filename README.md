@@ -62,21 +62,46 @@ npm link        # 全局 omd-dsh 命令
 
 ## 使用
 
+> ⚠️ **先同步，再使用**：安装只给你 `omd-dsh` 命令本身。必须跑一次 `omd-dsh sync`（或 `omd-dsh setup`）把 7 个 preset 写入 `~/.dsh/.agent-presets`，然后**重启 `dsh web`**——preset 选择器里才会出现这些模式、才能正常用。没同步之前，模式是「看不见也选不到」的。
+
 ```bash
 omd-dsh sync    # 把 7 个模式写入 ~/.dsh/.agent-presets
 omd-dsh setup   # 交互式：逐模式 / 逐 tier 选模型，再同步
 omd-dsh models  # 列出发现的模型
 ```
 
-### 定位 DSH harness
+### 定位 DSH harness（什么时候用 `--harness`）
 
-`sync` / `setup` 需要找到 DSH 的 node_modules，两种方式：
+`sync` / `setup` 需要找到 DSH 的 node_modules，会先尝试自动探测（`where dsh`）。**当你看到下面这个错误，就说明自动探测失败、该用 `--harness` 了：**
 
-1. **自动**：`dsh` 命令在 PATH 上（DSH 全局安装时）；
-2. **手动**：DSH 是 `npx` 装的（`dsh` 不在稳定 PATH）时，用 `--harness` 显式指定：
+```
+omd-dsh sync: cannot locate the DSH harness node_modules.
+```
+
+`--harness` 要传的是 **DSH 的 node_modules 目录**，这样找：
+
+1. 先定位 `dsh` 可执行文件在哪：
+   - Windows PowerShell：`Get-Command dsh`（或 `where dsh`）
+   - macOS / Linux：`which dsh`
+2. 从 `dsh` 所在路径往上一级级找，找到 `node_modules` 目录（里面应能看到 `@deepseek-ai\dsh-scope`）——这个目录就是 `--harness` 的值。
+
+常见位置：
+
+| DSH 安装方式 | node_modules 大概在哪 |
+|---|---|
+| 全局 `npm i -g` | 直接跑 `npm root -g`，它打印出来的就是 |
+| `npx` 装的 | Windows：`%LOCALAPPDATA%\npm-cache\_npx\<hash>\node_modules` |
+
+用法：
 
 ```bash
-omd-dsh sync --harness "<DSH 的 node_modules 路径>"
+omd-dsh sync --harness "<上面的 node_modules 路径>"
+```
+
+举例（Windows + npx）：
+
+```bash
+omd-dsh sync --harness "C:\Users\you\AppData\Local\npm-cache\_npx\xxxx\node_modules"
 ```
 
 同步后启动 `dsh web`，preset 选择器里就会出现 7 个 OMD 模式，新建会话即可用。
