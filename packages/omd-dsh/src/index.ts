@@ -2,7 +2,7 @@ import z from "@deepseek-ai/schemastery";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
 
 /**
- * @module @subagent-router/omd-dsh
+ * @module @carljia/omd-dsh
  *
  * omd-mode: per-mode (agent preset) model routing row for DeepSeek Harness.
  *

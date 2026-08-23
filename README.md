@@ -31,7 +31,7 @@ npm install     # 装依赖 + 触发 build
 npm link        # 全局 omd-dsh 命令
 ```
 
-发布到 npm 后，也可以直接 `npm i -g @subagent-router/omd-dsh`。
+发布到 npm 后，也可以直接 `npm i -g @carljia/omd-dsh`。
 
 ## 使用
 

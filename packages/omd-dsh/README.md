@@ -1,4 +1,4 @@
-# @subagent-router/omd-dsh
+# @carljia/omd-dsh
 
 OMD 理念的 DSH 插件：两个 cordis 行 + 7 个模式 preset + 同步 CLI。总览、模式矩阵与安装见仓库根 [README.md](../../README.md)。
 

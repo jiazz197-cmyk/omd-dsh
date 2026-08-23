@@ -4,7 +4,7 @@ import { assertSubagentMaxDepth } from "@deepseek-ai/dsh-subagent";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
 
 /**
- * @module @subagent-router/omd-dsh/task
+ * @module @carljia/omd-dsh/task
  *
  * omd-task: tiered subagent delegation tool (the DSH-native equivalent of
  * OMD task(category=...)).

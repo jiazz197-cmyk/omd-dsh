@@ -4,7 +4,7 @@
 
 ```
 subagent_router/
-└── packages/omd-dsh/                 # npm 插件包 @subagent-router/omd-dsh
+└── packages/omd-dsh/                 # npm 插件包 @carljia/omd-dsh
     ├── src/index.ts                  # omd-mode 行：按模式固定模型路由
     ├── src/task.ts                   # omd-task 行：tier 差异化子代理委派
     ├── src/cli.ts                    # omd-dsh sync：vendored 分发 + harness 锚定

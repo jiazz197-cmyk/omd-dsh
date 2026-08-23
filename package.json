@@ -1,5 +1,5 @@
 {
-  "name": "subagent-router",
+  "name": "omdsh",
   "version": "0.1.0",
   "private": true,
   "description": "OMD 理念在 DeepSeek Harness 上的插件式迁移：模式能力边界 + 按模式配模型 + 同模式差异化子代理调用",
@@ -8,9 +8,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @subagent-router/omd-dsh",
-    "test": "npm run test --workspace @subagent-router/omd-dsh",
-    "pack": "npm pack --workspace @subagent-router/omd-dsh"
+    "build": "npm run build --workspace @carljia/omd-dsh",
+    "test": "npm run test --workspace @carljia/omd-dsh",
+    "pack": "npm pack --workspace @carljia/omd-dsh"
   },
   "license": "MIT"
 }
