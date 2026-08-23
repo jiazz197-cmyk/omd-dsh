@@ -120,7 +120,7 @@
             persona: >-
               You are a FAST worker subagent (快速执行子代理): complete the assigned task efficiently with the tools you have; prefer short, focused answers.
             toolFilter:
-              deny: [write, edit, pwsh, bash, str_replace_editor]
+              deny: [write, edit, pwsh, bash]
           deep:
             provider: deepseek-official
             model: deepseek-v4-pro

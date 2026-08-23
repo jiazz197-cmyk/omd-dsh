@@ -47,13 +47,20 @@ function apply(ctx, config) {
         model: config.model,
       }
     : undefined;
+
+  // 子代理（subagentDepth > 0）透传：omo-task 的 tier 模型通过显式 agentOptions
+  // 落到子代理的 AgentOptions 上，本行若再覆盖会压回模式模型、破坏差异化委派。
+  // 无显式 agentOptions 的子代理按 DSH 原生语义继承父级入口选择。
+  const isSubagent = (agent: any) =>
+    agent !== undefined && agent !== null && agent.options !== undefined && agent.options !== null
+      && typeof agent.options.subagentDepth === "number" && agent.options.subagentDepth > 0;
   if (config.reasoningEffort !== undefined && pinned !== undefined) {
     pinned.reasoningEffort = config.reasoningEffort;
   }
 
   ctx.on("system-prompt/assemble", async (assembly, _context, next) => {
     const assembled = await next();
-    if (pinned === undefined) return assembled;
+    if (pinned === undefined || isSubagent(_context && _context.agent)) return assembled;
     return {
       ...assembled,
       variables: {
@@ -64,9 +71,9 @@ function apply(ctx, config) {
     };
   }, { prepend: true });
 
-  ctx.on("agent/request", async (_payload, _context, next) => {
+  ctx.on("agent/request", async (_payload, next) => {
     const resolved = await next();
-    if (pinned === undefined) return resolved;
+    if (pinned === undefined || isSubagent(_payload && _payload.agent)) return resolved;
     const stripped = { ...resolved };
     delete stripped.reasoningEffort;
     const out = {

@@ -50,3 +50,15 @@ npm pack        # prepack 自动重建，产出 tgz
 
 测试桩在 test/stubs/（dsh-scope/dsh-tools/dsh-subagent 的轻量替身），不依赖真实 harness。
 
+
+### 子代理透传语义
+
+omo-mode 对 subagentDepth > 0 的子代理一律透传（不覆盖 provider/model/变量）：
+omo-task 的 tier 模型通过显式 agentOptions 生效；顶层 agent 才被钉到模式模型。
+这保证「强模型顶层 + tier 差异化子代理」的优先级正确。
+
+### toolFilter 注意
+
+tiers 里的 toolFilter.deny/allow 只能点名该 preset 工具层中真实存在的工具名，
+否则子代理创建会被 DSH 以工具层错误拒绝。只读模式的 tiers 建议不配 toolFilter。
+
