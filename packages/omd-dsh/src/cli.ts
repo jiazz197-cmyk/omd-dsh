@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { promises as fs, existsSync, realpathSync, readFileSync, writeFileSync } from "node:fs";
+import { promises as fs, existsSync, realpathSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join, relative, resolve, basename } from "node:path";
 import { homedir } from "node:os";
@@ -45,7 +45,7 @@ function usage() {
     "    setup    interactive: discover DSH models, then guide per-mode/tier model selection",
     "    models   print the discovered DSH model catalog",
     "  options:",
-    "    --harness <path>  node_modules dir of the DSH harness install (auto-detected via the dsh executable)",
+    "    --harness <path>  node_modules dir of the DSH harness install (saved locally after first use; otherwise auto-detected)",
     "    --dry-run         (sync) print planned writes without touching the filesystem",
     "    --verbose         (sync) print per-file detail",
   ].join("\n");
@@ -63,6 +63,53 @@ function findNodeModules(start: string) {
     current = parent;
   }
 }
+function harnessCachePath() { return join(dshHome(), "omd-dsh-harness.json"); }
+
+/** Read the cached harness node_modules, ignoring a stale/missing entry. */
+function readCachedHarness() {
+  try {
+    const p = harnessCachePath();
+    if (!existsSync(p)) return undefined;
+    const parsed = JSON.parse(readFileSync(p, "utf8"));
+    const nm = parsed && typeof parsed === "object" ? parsed.harnessNodeModules : undefined;
+    if (typeof nm !== "string" || nm === "") return undefined;
+    if (!existsSync(join(nm, "@deepseek-ai", "dsh-scope", "package.json"))) return undefined;
+    return nm;
+  } catch { return undefined; }
+}
+
+/** Persist the resolved harness node_modules for later runs (best-effort). */
+function writeCachedHarness(harnessNodeModules: string) {
+  try {
+    writeFileSync(harnessCachePath(), JSON.stringify({ harnessNodeModules }, null, 2) + "\n", "utf8");
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Resolve the DSH harness node_modules:
+ *   1. --harness flag (and cache it for later);
+ *   2. auto-detect via the dsh executable on PATH;
+ *   3. fall back to the locally cached value.
+ */
+function resolveHarness(flags: Flags) {
+  let nm: string | undefined;
+  if (flags.harness !== undefined) {
+    nm = findNodeModules(flags.harness);
+    if (nm !== undefined) {
+      try {
+        nm = realpathSync(nm);
+        writeCachedHarness(nm);
+      } catch { /* keep nm as-is */ }
+    }
+    return nm;
+  }
+  nm = locateHarnessViaDsh() ?? locateHarnessViaNpxCache() ?? readCachedHarness();
+  if (nm !== undefined) {
+    try { nm = realpathSync(nm); } catch { /* keep */ }
+  }
+  return nm;
+}
+
 function locateHarnessViaDsh() {
   const candidates: string[] = [];
   try {
@@ -78,6 +125,41 @@ function locateHarnessViaDsh() {
   }
   return undefined;
 }
+/** Candidate npx cache roots where a non-global DSH install may live. */
+function npxCacheRoots(): string[] {
+  const roots: string[] = [];
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) roots.push(join(localAppData, "npm-cache", "_npx"));
+    const appData = process.env.APPDATA;
+    if (appData) roots.push(join(appData, "npm-cache", "_npx"));
+  } else {
+    roots.push(join(homedir(), ".npm", "_npx"));
+  }
+  return roots;
+}
+
+/**
+ * Best-effort scan of the npx cache for a DSH install whose node_modules
+ * carries @deepseek-ai/dsh-scope. Picks the most recently touched one.
+ */
+function locateHarnessViaNpxCache() {
+  const matches: { nm: string; mtime: number }[] = [];
+  for (const root of npxCacheRoots()) {
+    let entries: string[];
+    try { entries = readdirSync(root); } catch { continue; }
+    for (const entry of entries) {
+      const nm = join(root, entry, "node_modules");
+      if (!existsSync(join(nm, "@deepseek-ai", "dsh-scope", "package.json"))) continue;
+      let mtime = 0;
+      try { mtime = statSync(join(root, entry)).mtimeMs; } catch { /* keep 0 */ }
+      matches.push({ nm, mtime });
+    }
+  }
+  matches.sort((a, b) => b.mtime - a.mtime);
+  return matches.length > 0 ? matches[0].nm : undefined;
+}
+
 function resolveHarnessModule(harnessNodeModules: string, specifier: string) {
   const segments = specifier.split("/");
   const scope = segments[0].startsWith("@") ? segments[0] + "/" + segments[1] : segments[0];
@@ -366,7 +448,7 @@ async function runSetup(flags: Flags, harnessNodeModules: string | undefined) {
   rl.close();
   if (syncNow === "" || /^y/i.test(syncNow)) {
     if (harnessNodeModules === undefined) {
-      console.error("omd-dsh setup: 无法定位 DSH harness node_modules，跳过同步。稍后运行 `omd-dsh sync --harness <路径>`。");
+      console.error("omd-dsh setup: 无法定位 DSH harness node_modules，跳过同步。首次请运行 `omd-dsh sync --harness <路径>`（之后会自动缓存，无需重复指定）。");
     } else {
       await runSync(flags, harnessNodeModules);
     }
@@ -400,19 +482,16 @@ async function main() {
   }
 
   if (command === "setup") {
-    let harnessNodeModules = flags.harness !== undefined ? findNodeModules(flags.harness) : locateHarnessViaDsh();
-    if (harnessNodeModules !== undefined) harnessNodeModules = realpathSync(harnessNodeModules);
-    await runSetup(flags, harnessNodeModules);
+    await runSetup(flags, resolveHarness(flags));
     return;
   }
 
-  let harnessNodeModules = flags.harness !== undefined ? findNodeModules(flags.harness) : locateHarnessViaDsh();
+  const harnessNodeModules = resolveHarness(flags);
   if (harnessNodeModules === undefined || !existsSync(join(harnessNodeModules, "@deepseek-ai", "dsh-scope", "package.json"))) {
-    console.error("omd-dsh sync: cannot locate the DSH harness node_modules.\n  - ensure the dsh executable is on PATH, or\n  - pass --harness <path to the harness node_modules directory>.\n\n" + usage());
+    console.error("omd-dsh sync: cannot locate the DSH harness node_modules.\n  - ensure the dsh executable is on PATH, or\n  - pass --harness <path to the harness node_modules directory> (saved for later runs).\n\n" + usage());
     process.exitCode = 2;
     return;
   }
-  harnessNodeModules = realpathSync(harnessNodeModules);
   await runSync(flags, harnessNodeModules);
 }
 
