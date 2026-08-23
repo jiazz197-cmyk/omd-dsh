@@ -9,19 +9,19 @@
 #   3. 下一会话生效；换模型改 config 即可。
 #
 # ── 固定模型 ──
-- id: omo-mode
-  name: '../.omo-vendor/omo-mode.mjs'
+- id: omd-mode
+  name: '../.omd-vendor/omd-mode.mjs'
   config:
     mode: std-pinned
     provider: deepseek-official
     model: deepseek-v4-pro
 
 # ── 差异化委派（可选；需 std-pinned 已挂 tool-subagent-control/list-agents 等委派行）──
-- id: omo-task
-  name: '../.omo-vendor/omo-task.mjs'
+- id: omd-task
+  name: '../.omd-vendor/omd-task.mjs'
   config:
     provider: spawn
-    toolName: omo_task
+    toolName: omd_task
     backgroundMode: continuable
     tiers:
       fast:

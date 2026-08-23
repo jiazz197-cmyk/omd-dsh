@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "defaults": {
+    "provider": "deepseek-official"
+  },
+  "modes": {
+    "executor": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-pro",
+      "tiers": {
+        "fast": {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "hint": "cheap and fast — repetitive investigation, searching, summarising, mechanical work",
+          "persona": "You are a FAST worker subagent (快速执行子代理): complete the assigned task efficiently with the tools you have; prefer short, focused answers.",
+          "toolFilter": { "deny": ["write", "edit"], "denyShell": true }
+        },
+        "deep": {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-pro",
+          "hint": "strong reasoning — hard problems, architecture, deep debugging",
+          "persona": "You are a DEEP worker subagent (深度推理子代理): solve the assigned hard task with careful reasoning; verify your conclusions before answering."
+        }
+      }
+    },
+    "architect": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-pro",
+      "tiers": {
+        "fast": {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "hint": "cheap and fast — repetitive investigation, searching, summarising, mechanical work",
+          "persona": "You are a FAST worker subagent (快速执行子代理): complete the assigned task efficiently with the tools you have; prefer short, focused answers.",
+          "toolFilter": { "deny": ["write", "edit"], "denyShell": true }
+        },
+        "deep": {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-pro",
+          "hint": "strong reasoning — hard problems, architecture, deep debugging",
+          "persona": "You are a DEEP worker subagent (深度推理子代理): solve the assigned hard task with careful reasoning; verify your conclusions before answering."
+        }
+      }
+    },
+    "planner": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-pro",
+      "tiers": {
+        "investigate": {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-flash",
+          "hint": "cheap and fast — content investigation, searching, summarising",
+          "persona": "You are a CONTENT INVESTIGATOR subagent (内容调查员): investigate the assigned topic by reading and searching; report findings precisely with sources."
+        },
+        "review": {
+          "provider": "deepseek-official",
+          "model": "deepseek-v4-pro",
+          "hint": "strong reasoning — critical review of plans and designs",
+          "persona": "You are a PLAN REVIEWER subagent (方案评审员): critically review the assigned plan or design; list defects, risks and missing edge cases precisely."
+        }
+      }
+    },
+    "reviewer": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-flash"
+    },
+    "explorer": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-flash"
+    },
+    "librarian": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-flash"
+    },
+    "chat": {
+      "provider": "deepseek-official",
+      "model": "deepseek-v4-flash"
+    }
+  }
+}

@@ -1,2 +1,0 @@
-chunk3
-const d = { reasoningEffort: _x, ...rest } = obj;

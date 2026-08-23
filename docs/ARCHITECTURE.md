@@ -4,51 +4,51 @@
 
 ```
 subagent_router/
-└── packages/omo-dsh/                 # npm 插件包 @subagent-router/omo-dsh
-    ├── src/index.ts                  # omo-mode 行：按模式固定模型路由
-    ├── src/task.ts                   # omo-task 行：tier 差异化子代理委派
-    ├── src/cli.ts                    # omo-dsh sync：vendored 分发 + harness 锚定
-    ├── presets/omo-{7 模式}/          # agent.cordis.yml + preset.yml
-    └── lib/vendor/omo-{mode,task}.mjs # 构建产物（sync 改写导入后落盘）
+└── packages/omd-dsh/                 # npm 插件包 @subagent-router/omd-dsh
+    ├── src/index.ts                  # omd-mode 行：按模式固定模型路由
+    ├── src/task.ts                   # omd-task 行：tier 差异化子代理委派
+    ├── src/cli.ts                    # omd-dsh sync：vendored 分发 + harness 锚定
+    ├── presets/omd-{7 模式}/          # agent.cordis.yml + preset.yml
+    └── lib/vendor/omd-{mode,task}.mjs # 构建产物（sync 改写导入后落盘）
 ```
 
 部署形态：
 
 ```
 <DSH_HOME>/.agent-presets/           # DSH 用户 preset 根（includeUserRoot 默认开启）
-├── omo-executor/ ... omo-chat/       # 7 个模式（含 .omo-meta.json）
-└── .omo-vendor/                      # 点前缀目录，preset 发现会跳过
-    ├── omo-mode.mjs                 # 导入已改写为 harness 树 file:// URL
-    └── omo-task.mjs
+├── omd-executor/ ... omd-chat/       # 7 个模式（含 .omd-meta.json）
+└── .omd-vendor/                      # 点前缀目录，preset 发现会跳过
+    ├── omd-mode.mjs                 # 导入已改写为 harness 树 file:// URL
+    └── omd-task.mjs
 ```
 
-## omo-mode：按模式配模型的机制
+## omd-mode：按模式配模型的机制
 
 DSH 入口（web/headless）创建 agent 时通过 installModelSelection(agent.ctx, selection) 安装会话级模型选择：
 
 - system-prompt/assemble waterfall：把 provider/model 写入提示词变量（persona 的 {{model}} 来源）；
 - agent/request waterfall：在 next() 之后把 provider/model/reasoningEffort 覆盖进请求路由。
 
-omo-mode 与此同构，但用组合配置里的固定值，并注册时带 prepend: true：
+omd-mode 与此同构，但用组合配置里的固定值，并注册时带 prepend: true：
 
 ```
 waterfall 展开顺序（最外层先执行）
-  omo-mode(assemble) ──▶ installModelSelection(assemble) ──▶ 内层组装
-  omo-mode(request)  ──▶ installModelSelection(request)  ──▶ 内层路由
+  omd-mode(assemble) ──▶ installModelSelection(assemble) ──▶ 内层组装
+  omd-mode(request)  ──▶ installModelSelection(request)  ──▶ 内层路由
 ```
 
-omo-mode 的监听器在最外层：它先调用 next() 让入口监听器跑完，再把自己的 provider/model 覆盖上去——所以模式配置永远赢过会话选择，这正是「每个模式配自己的模型」。未配置 provider/model 时两个监听器完全透传（退化横幅展示），因此该行可安全挂进任何 preset。
+omd-mode 的监听器在最外层：它先调用 next() 让入口监听器跑完，再把自己的 provider/model 覆盖上去——所以模式配置永远赢过会话选择，这正是「每个模式配自己的模型」。未配置 provider/model 时两个监听器完全透传（退化横幅展示），因此该行可安全挂进任何 preset。
 
 scope-only 守卫：无作用域挂载会钉死进程内所有 agent 的模型，直接拒绝（仿 dsh-persona 的先例）。
 
-## omo-task：tier 差异化委派的机制
+## omd-task：tier 差异化委派的机制
 
 内置 dsh-tool-subagent 的 Config 里 agentOptions/persona/toolFilter 是每实例固定的（README 明示：换模型/换 persona 需要另一个名字不同的工具实例），模型无法按次选模型。
 
-但 dsh-subagent 服务本身支持 per-request 的 agentOptions/persona/toolFilter（resolveChildAgentOptions 显式覆盖父级继承）。omo-task 把这个能力暴露给模型：
+但 dsh-subagent 服务本身支持 per-request 的 agentOptions/persona/toolFilter（resolveChildAgentOptions 显式覆盖父级继承）。omd-task 把这个能力暴露给模型：
 
 ```
-模型调用 omo_task { prompt, tier: "investigate", run_in_background? }
+模型调用 omd_task { prompt, tier: "investigate", run_in_background? }
         │
         ├─ tier → { provider, model, maxTokens }  → request.agentOptions
         ├─ tier → persona                        → request.persona（子代理 persona）
@@ -65,7 +65,7 @@ tier 解析顺序：显式 tier → defaultTier → 单 tier 自动选择 → �
 
 对策（sync 的默认路径）：
 
-1. 行模块以相对路径挂在 preset 里（../.omo-vendor/*.mjs），与 package 解耦；
+1. 行模块以相对路径挂在 preset 里（../.omd-vendor/*.mjs），与 package 解耦；
 2. sync 把行模块中所有裸 @deepseek-ai/* 导入改写为指向 harness node_modules 的绝对 file:// URL（harness 根 = dsh 可执行文件定位，--harness 可覆盖）；
 3. 于是行模块与 harness 共享同一实例的 dsh-scope / cordis / schemastery / dsh-tools / dsh-subagent，符号单实例。
 
@@ -73,37 +73,37 @@ tier 解析顺序：显式 tier → defaultTier → 单 tier 自动选择 → �
 
 ## sync 的写入安全
 
-- 只写 omo-* 与 .omo-vendor 目录；每目录 .omo-meta.json 记录来源版本与逐文件 sha256。
+- 只写 omd-* 与 .omd-vendor 目录；每目录 .omd-meta.json 记录来源版本与逐文件 sha256。
 - 目标文件 hash == 当前源 → up-to-date 跳过；== 上次源 → 覆盖升级；否则视为本地修改 → conflict 不覆盖。
 - 包内已移除的模式目录 → 报告 orphan，绝不自动删除。
 
 ## preset 发现与行解析（DSH 原生机制）
 
-- dsh-agent-presets 默认 includeUserRoot：扫描 <DSH_HOME>/.agent-presets；目录名不合 [a-z0-9][a-z0-9-]* 的（如 .omo-vendor）被跳过。
-- 行名是相对路径时从 preset 目录解析（../.omo-vendor/omo-mode.mjs）；是裸包名时从宿主 base（profile 目录）解析；是绝对路径时保留。
+- dsh-agent-presets 默认 includeUserRoot：扫描 <DSH_HOME>/.agent-presets；目录名不合 [a-z0-9][a-z0-9-]* 的（如 .omd-vendor）被跳过。
+- 行名是相对路径时从 preset 目录解析（../.omd-vendor/omd-mode.mjs）；是裸包名时从宿主 base（profile 目录）解析；是绝对路径时保留。
 - running 会话按代际继续使用已挂载组合；编辑 preset 文件只影响之后创建的会话。改坏 YAML 的 preset 会被列为 broken 并显示原因。
 
 ## Team Mode 映射（v1 未实现，文档方向）
 
-OmO 的 team mode（lead + members、共享任务表、mailbox）在 DSH 的对应物：
+OMD 的 team mode（lead + members、共享任务表、mailbox）在 DSH 的对应物：
 
 - 并行多成员 = workflow 工具（multi-agent fan-out，structured results）；
 - 长期单一目标 = goal 工具（round-driven 自动续跑）；
 - 新上下文迭代 = ralph 工具（fresh-agent rounds）；
 - 共享工作区 = 子代理会话与文件系统。
 
-v2 方向：/omo 切换命令（host 层 commands registry，需要 bundle patch）、Settings 页 live 编辑模式模型（settings namespace）。
+v2 方向：/omd 切换命令（host 层 commands registry，需要 bundle patch）、Settings 页 live 编辑模式模型（settings namespace）。
 
 
-## omo-mode 与子代理的优先级（差异化委派的关键）
+## omd-mode 与子代理的优先级（差异化委派的关键）
 
-子代理通过 composeFrom 加入父级 preset 的同一份常驻组合，因此 omo-mode 的
+子代理通过 composeFrom 加入父级 preset 的同一份常驻组合，因此 omd-mode 的
 agent/request 监听器同样会作用于子代理。若不设防，模式模型会压回子代理的
 tier 模型（实测复现：tier 子代理的 header 显示父模式模型）。
 
-规则：**omo-mode 对 subagentDepth > 0 的子代理一律透传**。于是：
+规则：**omd-mode 对 subagentDepth > 0 的子代理一律透传**。于是：
 
-- omo-task 的 tier 通过显式 agentOptions 落到子代理的 AgentOptions，成为其
+- omd-task 的 tier 通过显式 agentOptions 落到子代理的 AgentOptions，成为其
   路由（tier 模型 > 模式模型，实测证明）；
 - 无显式 agentOptions 的子代理按 DSH 原生语义继承父级入口选择；
 - 顶层 agent（subagentDepth 缺省/0）仍被本行钉到模式模型。
@@ -115,6 +115,6 @@ tier 模型（实测复现：tier 子代理的 header 显示父模式模型）�
   deny 了其组合中不存在的 pwsh/bash 导致调用失败）。因此只读模式的 tiers
   不配 toolFilter——只读边界由组合本身决定；全量模式的 tiers 才 deny
   write/edit/pwsh/bash。
-- 运行中的进程按 ESM URL 缓存 vendored 行模块：升级 omo-dsh 后需重启
+- 运行中的进程按 ESM URL 缓存 vendored 行模块：升级 omd-dsh 后需重启
   harness 进程，新版本才会被 preset 挂载加载。
 

@@ -1,14 +1,14 @@
-# 自建新模式模板：复制 presets/omo-chat 目录为 omo-<新id> 后按此改
-# （id 必须匹配 [a-z0-9][a-z0-9-]*；omo- 前缀避免与随附 preset 冲突）
+# 自建新模式模板：复制 presets/omd-chat 目录为 omd-<新id> 后按此改
+# （id 必须匹配 [a-z0-9][a-z0-9-]*；omd- 前缀避免与随附 preset 冲突）
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
     text: >-
-      You are in OMO <MODE> mode (OMO · <模式名>): <一句话定位>. 本模式路由模型：{{model}}（provider: {{provider}}）。
+      You are in OMD <MODE> mode (OMD · <模式名>): <一句话定位>. 本模式路由模型：{{model}}（provider: {{provider}}）。
 
-- id: omo-mode
-  name: '../.omo-vendor/omo-mode.mjs'
+- id: omd-mode
+  name: '../.omd-vendor/omd-mode.mjs'
   config:
     mode: <mode-id>
     provider: deepseek-official
