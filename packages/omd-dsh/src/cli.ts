@@ -27,7 +27,7 @@ import { createInterface } from "node:readline/promises";
  */
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const VENDOR_SOURCES = ["omd-mode.mjs", "omd-task.mjs"];
+const VENDOR_SOURCES = ["omd-mode.mjs", "omd-task.mjs", "omd-ulw.mjs"];
 const MATRIX_PATH = join(PACKAGE_ROOT, "omd-matrix.json");
 const MODE_FENCE = { start: "# [omd-dsh:mode:start]", end: "# [omd-dsh:mode:end]" };
 const TASK_FENCE = { start: "# [omd-dsh:task:start]", end: "# [omd-dsh:task:end]" };
