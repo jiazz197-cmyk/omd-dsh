@@ -1,0 +1,19 @@
+# 自建新模式模板：复制 presets/omo-chat 目录为 omo-<新id> 后按此改
+# （id 必须匹配 [a-z0-9][a-z0-9-]*；omo- 前缀避免与随附 preset 冲突）
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are in OMO <MODE> mode (OMO · <模式名>): <一句话定位>. 本模式路由模型：{{model}}（provider: {{provider}}）。
+
+- id: omo-mode
+  name: '../.omo-vendor/omo-mode.mjs'
+  config:
+    mode: <mode-id>
+    provider: deepseek-official
+    model: deepseek-v4-flash   # 或 deepseek-v4-pro / 任意已注册 provider/model
+
+# 工具边界从这里开始：挂什么模型就能用什么，不挂就看不见。
+# 参考 DSH 随附 standard preset 的行写法（persona/agent-instructions/tool-fs/…）。
+
