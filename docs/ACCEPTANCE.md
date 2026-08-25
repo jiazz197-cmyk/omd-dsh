@@ -58,7 +58,7 @@ dsh --profile web --port 3099
 | 日期 | 验收项 | 结果 | 证据 |
 |---|---|---|---|
 | 2026-08-23 | 静态（npm test） | ✅ 39/39 通过 | packages/omd-dsh，vitest（omd-mode 12 / omd-task 20 / sync CLI 7） |
-| 2026-08-23 | 可见性（7 模式列出） | ✅ 全部列出、无 broken | agentPreset.list：omd-executor/architect/planner/reviewer/explorer/librarian/chat（user 信任）与 standard/code(PTC)/minimal/cordis 并列 |
+| 2026-08-23 | 可见性（7 模式列出） | ✅ 全部列出、无 broken | agentPreset.list：omd-executor/ultraworker/planner/reviewer/explorer/librarian/chat（user 信任）与 standard/code(PTC)/minimal/cordis 并列 |
 | 2026-08-23 | 能力边界（工具矩阵核对） | ✅ 与组合一致 | omd-chat 会话 request/header 工具清单恰为 ask_user_question/todo_write/web_search（无 pwsh/read/write/edit）；omd-executor 为全量 24 工具含 omd_task |
 | 2026-08-23 | 按模式配模型（负向证明） | ✅ 路由生效 | omd-chat 模型 pin 为 __omo_accept_nonexistent__ 后：request/header 记录该模型、persona {{model}} 渲染同名、DeepSeek API 报错点名该 id；恢复配置 |
 | 2026-08-23 | 差异化 tier 路由（负向证明） | ✅ 两档独立路由 | planner（顶层 v4-pro）内：tier=investigate 子代理 header=__omo_tier_investigate__ 且报错点名；tier=review 子代理 header=__omo_tier_review__ 且报错点名；executor 的 omd_task 描述枚举 fast(v4-flash)/deep(v4-pro) |

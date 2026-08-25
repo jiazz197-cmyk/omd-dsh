@@ -38,15 +38,15 @@ tier 差异化子代理委派（等价 OMD 的 task(category=…)）。仅限 pr
 omd-dsh <command> [--harness <路径>] [--dry-run]
 ```
 
-- `omd-dsh sync` — 把 presets/ 与 vendored 行模块同步到 `<DSH_HOME>/.agent-presets/`（hash 保护、orphan 报告、非管理目录零操作）。每个 preset 的 omd-mode / omd-task 行由 `omd-matrix.json` 渲染。
-- `omd-dsh setup` — 交互式向导：先读取 DSH 已有模型，再引导逐模式/逐 tier 选择模型，写回 `omd-matrix.json` 并可选立即同步。
+- `omd-dsh sync` — 把 presets/ 与 vendored 行模块同步到 `<DSH_HOME>/.agent-presets/`（hash 保护、orphan 报告、非管理目录零操作）。每个 preset 的 omd-mode / omd-task 行由用户矩阵 `<DSH_HOME>/omd-matrix.json` 渲染。
+- `omd-dsh setup` — 交互式向导：先读取 DSH 已有模型，再引导逐模式/逐 tier 选择模型，写回 `<DSH_HOME>/omd-matrix.json` 并可选立即同步。
 - `omd-dsh models` — 打印发现的 DSH 模型目录（非交互）。
 
 细节见 docs/ARCHITECTURE.md 的「vendored 分发与跨树符号风险」。
 
-## 集中配置：omd-matrix.json
+## 集中配置：<DSH_HOME>/omd-matrix.json
 
-所有模式的模型路由（provider/model/reasoningEffort）与 omd_task 各 tier 的模型集中在一个 `omd-matrix.json` 里：`omd-dsh setup` 生成/更新它，`omd-dsh sync` 读取它并渲染进各 preset。preset 里 `# [omd-dsh:mode:start] / [omd-dsh:mode:end]` 与 `# [omd-dsh:task:start] / [omd-dsh:task:end]` 之间的区域是自动生成的——改模型请改矩阵后跑 sync，不要手改 fence 之间的内容。
+所有模式的模型路由（provider/model/reasoningEffort）与 omd_task 各 tier 的模型集中在用户矩阵 `<DSH_HOME>/omd-matrix.json`（默认 `~/.dsh/omd-matrix.json`）：`omd-dsh sync` 首次运行把随包的 deepseek 默认矩阵 `omd-matrix.default.json` 复制为默认配置（或从旧版本包内位置迁移一次），`omd-dsh setup` 更新它，`omd-dsh sync` 读取它并渲染进各 preset。仓库与 npm 包只携带默认矩阵文件，**不含任何个人模型配置**——个人模型配置只留在本机。preset 里 `# [omd-dsh:mode:start] / [omd-dsh:mode:end]` 与 `# [omd-dsh:task:start] / [omd-dsh:task:end]` 之间的区域是自动生成的——改模型请改矩阵后跑 sync，不要手改 fence 之间的内容。
 
 ## 开发
 

@@ -14,10 +14,7 @@
           "hint": "cheap and fast — repetitive investigation, searching, summarising, mechanical work",
           "persona": "You are a FAST worker subagent (快速执行子代理): complete the assigned task efficiently with the tools you have; prefer short, focused answers.",
           "toolFilter": {
-            "deny": [
-              "write",
-              "edit"
-            ],
+            "deny": ["write", "edit"],
             "denyShell": true
           }
         },
@@ -29,7 +26,7 @@
         }
       }
     },
-    "architect": {
+    "ultraworker": {
       "provider": "deepseek-official",
       "model": "deepseek-v4-pro",
       "tiers": {
@@ -39,10 +36,7 @@
           "hint": "cheap and fast — repetitive investigation, searching, summarising, mechanical work",
           "persona": "You are a FAST worker subagent (快速执行子代理): complete the assigned task efficiently with the tools you have; prefer short, focused answers.",
           "toolFilter": {
-            "deny": [
-              "write",
-              "edit"
-            ],
+            "deny": ["write", "edit"],
             "denyShell": true
           }
         },

@@ -8,6 +8,8 @@
 
 # [omd-dsh:mode:start]
 # [omd-dsh:mode:end]
+- id: omd-mode-switch
+  name: '../.omd-vendor/omd-mode-switch.mjs'
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
   config:

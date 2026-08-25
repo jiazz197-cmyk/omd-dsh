@@ -6,3 +6,6 @@ lib/
 dist/
 coverage/
 .omo-tmp/
+
+# 个人模型配置：由 omd-dsh sync 自动生成到 ~/.dsh/omd-matrix.json，不进仓库
+packages/omd-dsh/omd-matrix.json

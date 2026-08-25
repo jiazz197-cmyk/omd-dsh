@@ -43,7 +43,7 @@
   "files": [
     "lib",
     "presets",
-    "omd-matrix.json",
+    "omd-matrix.default.json",
     "README.md",
     "LICENSE"
   ],

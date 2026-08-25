@@ -22,6 +22,7 @@ omd-dsh **不重复造轮子**，它是一层很薄的「接线 + 组织」：�
 | fresh-agent 迭代 | DSH 原生 `ralph` |
 | tier 子代理委派 | DSH 原生 `subagent`（`omd_task` 只是暴露 per-request 模型/persona 选择） |
 | 规划访谈 | DSH 原生 `plan-mode` + `exit_plan_mode` |
+| PTC（Code Mode） | DSH 原生 `dsh-agent-tool-presentation`（mode: code）+ 宿主 `dsh-code-runtime` |
 | 只读/无 shell 边界 | DSH 原生 preset 工具组合（非自研沙箱） |
 | 技能 / MCP / 终端 | DSH 原生 skills / mcp-client / bash·pwsh |
 
@@ -30,14 +31,14 @@ omd-dsh **不重复造轮子**，它是一层很薄的「接线 + 组织」：�
 | 模式 | 定位 | 能力边界 |
 |---|---|---|
 | `omd-executor` | 全自主执行 | 完整工具集 + goal / ralph / workflow / 委派 |
-| `omd-architect` | 深度构建 | 完整工具集 + goal / workflow / 委派 |
+| `omd-ultraworker` | 超能工作者 | 完整工具集 + goal / workflow / 委派 + PTC（Code Mode） |
 | `omd-planner` | 规划访谈 | 只读 + 委派（DSH 原生 plan-mode） |
 | `omd-reviewer` | 评审 | 只读 |
 | `omd-explorer` | 代码侦察 | 只读 |
 | `omd-librarian` | 文献研究 | 只读 |
 | `omd-chat` | 纯对话 | 无 fs / shell |
 
-各模式的模型集中在一个 `omd-matrix.json` 里，可用 `omd-dsh setup` 逐项改。
+各模式的模型集中在 **`~/.dsh/omd-matrix.json`**（首次 `omd-dsh sync` 自动从随包的 deepseek 默认矩阵生成），可用 `omd-dsh setup` 逐项改。
 
 ## 安装
 
@@ -106,9 +107,41 @@ omd-dsh sync --harness "<DSH 的 node_modules 路径>"
 
 会为这个任务挂一个 goal 并自动续跑，直到完成——**一键触发，不干完不罢休**。它等价于「executor 模式 + goal 自动续跑」的组合。
 
+## 规划 → 执行闭环（planner → start work）
+
+规划访谈（`omd-planner`）批准计划后，工作流自动收尾：
+
+1. 计划批准时，**计划文件自动落盘**到项目根目录的 `/.omd/plans/`（目录约定由插件代码写死，不出现在任何提示词里）；
+2. planner 的最终回复以**定死的 Start Work 收尾**，给出计划文件名和两种启动方式；
+3. 启动执行二选一：
+   - **新开会话**：在 omd-executor（或 omd-ultraworker）会话运行 `/start-work <计划文件名>`，自动挂 goal 并续跑执行；
+   - **同一会话**：直接运行 `/mode omd-executor` 切换模式后继续。
+
+## `/start-work` — 按计划文件开工
+
+在 **omd-executor / omd-ultraworker** 会话里输入：
+
+```
+/start-work <计划文件名>
+```
+
+解析 `/.omd/plans/` 下的计划文件（裸文件名、`.md`、完整相对路径均可），挂一个 goal 自动续跑，直到计划执行完成。与 `/ulw` 同一机制，只是任务文本换成「执行某个计划文件」。
+
+## `/mode` — 同一对话内切换模式
+
+所有 7 个模式都注册了 `/mode`：
+
+```
+/mode omd-executor      # 或 /mode executor
+```
+
+它把**当前会话**重新 compose 到目标 omd preset——包括已经开始对话的会话（工具集、persona、模型路由全部切换，并记录切换事件保证 resume/fork 一致；若计划模式仍开启会自动关闭）。
+
+> ⚠️ 说明：DSH 官方 API 只允许空会话切换 preset；`/mode` 在插件层做的是会话内 recompose，并已用「planner 工具目录 ⊆ executor 工具目录」等设计缓解历史渲染问题。切换只允许在 7 个 omd 模式之间进行。
+
 ## 改模型
 
-模型集中在 `omd-matrix.json`：跑 `omd-dsh setup` 逐项改，或直接编辑后 `omd-dsh sync`。
+模型矩阵保存在 **`~/.dsh/omd-matrix.json`**（DSH_HOME 下）：首次 `omd-dsh sync` 会把随包发布的 **deepseek 默认矩阵**（`omd-matrix.default.json`）自动复制为你的默认配置（个人模型配置只留在本机，不进 git/npm）；此后跑 `omd-dsh setup` 逐项改，或直接编辑该文件后 `omd-dsh sync`。每次 sync 输出都会提醒可用 `omd-dsh setup` 自定义模型矩阵。
 
 > ⚠️ preset 里 `# [omd-dsh:mode:start]` … `# [omd-dsh:mode:end]` 之间的区域是自动生成的，**不要手改**——改模型请改矩阵后跑 sync。
 
