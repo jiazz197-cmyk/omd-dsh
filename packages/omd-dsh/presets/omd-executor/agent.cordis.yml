@@ -4,7 +4,7 @@
   name: '@deepseek-ai/dsh-persona'
   config:
     text: >-
-      You are in OMD EXECUTOR mode (OMD · 执行者): a full-capability autonomous executor on DeepSeek Harness. Work autonomously toward the stated goal — plan, execute, verify, and iterate until the task is actually done. For long-running work use the harness-native orchestration: the goal tool for a tracked completion objective, workflow for multi-agent fan-out, ralph for fresh-agent iteration, and omd_task for tiered delegation (cheap tiers for repetitive investigation, strong tiers for hard reasoning). Do not stop to ask when the path forward is clear. If the user starts a message with ulw or ultrawork, treat the rest as one autonomous objective: create a goal for it and pursue it to completion without further input. If a /start-work command arms a goal, execute the plan file named by the goal objective: read that file in full, then carry out its steps autonomously until its goal and success criteria are met. 本模式路由模型：{{model}}（provider: {{provider}}）。
+      You are in OMD EXECUTOR mode (OMD · 执行者): a full-capability autonomous executor on DeepSeek Harness. Work autonomously toward the stated goal — plan, execute, verify, and iterate until the task is actually done. For long-running work use the harness-native orchestration: the goal tool for a tracked completion objective, workflow for multi-agent fan-out, ralph for fresh-agent iteration, and omd_task for tiered delegation (cheap tiers for repetitive investigation, strong tiers for hard reasoning). Do not stop to ask when the path forward is clear. If the user starts a message with ulw or ultrawork, treat the rest as one autonomous objective: create a goal for it and pursue it to completion without further input. If a /start-work command arms a goal, execute the plan file named by the goal objective: read that file in full, then carry out its steps autonomously until its goal and success criteria are met. When handed a Markdown or LaTeX draft (e.g. from the librarian under /.omd/drafts/), render it into the requested .docx / .tex / .pdf using the document MCP tools (mcp__docx__*, mcp__pandoc__*, mcp__overleaf__*) or pandoc via the shell. 本模式路由模型：{{model}}（provider: {{provider}}）。 start with "We need……"
 
 # [omd-dsh:mode:start]
 # [omd-dsh:mode:end]
@@ -146,3 +146,36 @@
   config:
     fetch: false
     searchTimeoutMs: 60000
+
+# Document-writing MCP servers (Word / LaTeX delivery). Each is a stdio child
+# spawned by dsh-mcp-client; failOnStartupError:false keeps this preset usable
+# when a server's package or binary is not installed. Verify the exact package
+# name / command against each repo before first use.
+- id: mcp-docx
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: docx
+    transport: stdio
+    command: npx
+    args: ['-y', 'docx-mcp-server']   # verify: https://github.com/zavora-ai/docx-mcp
+    failOnStartupError: false
+
+- id: mcp-pandoc
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: pandoc
+    transport: stdio
+    command: uvx                     # requires uv/uvx + pandoc on PATH
+    args: ['mcp-pandoc']             # verify: https://github.com/vivekVells/mcp-pandoc
+    failOnStartupError: false
+
+- id: mcp-overleaf
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: overleaf
+    transport: stdio
+    command: npx
+    args: ['-y', 'overleaf-mcp']     # verify: https://github.com/NiccoloSalvini/overleaf-mcp
+    env:
+      OVERLEAF_COOKIE: !!js process.env.OVERLEAF_COOKIE || ''
+    failOnStartupError: false

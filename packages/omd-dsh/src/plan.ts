@@ -5,13 +5,19 @@ import { scopeOf } from "@deepseek-ai/dsh-scope";
 /**
  * @module @carljia/omd-dsh/plan
  *
- * omd-plan: plan persistence for the OMD planner mode. It wraps the
- * `tools/post-execute` waterfall and intercepts a successful
- * `exit_plan_mode` approval: the approved plan text is written into the
- * workspace's plan directory (a fixed, code-level convention -- never
- * mentioned in any persona/prompt text), and the tool result content is
- * enriched with the saved file name so the planner's fixed Start Work
- * final step can hand it to the user.
+ * omd-plan: plan persistence + plan-mode activation + write scope for the OMD
+ * planner mode. Three jobs, all scoped to the planner preset:
+ *   1. auto-activate plan mode for the top-level agent, so the plan:policy
+ *      section renders and exit_plan_mode works (DSH leaves plan state
+ *      inactive until /plan or a programmatic set);
+ *   2. enforce a .md-only write guard so the planner stays read-only except
+ *      for markdown files;
+ *   3. wrap `tools/post-execute` and intercept a successful `exit_plan_mode`
+ *      approval: the approved plan text is written into the workspace's plan
+ *      directory (a fixed, code-level convention -- never mentioned in any
+ *      persona/prompt text), and the tool result content is enriched with the
+ *      saved file name so the planner's fixed Start Work final step can hand
+ *      it to the user.
  *
  * Plan directory convention (hardcoded here and in omd-start-work only):
  *   <session cwd>/.omd/plans/<slug>-<timestamp>.md
@@ -21,7 +27,7 @@ import { scopeOf } from "@deepseek-ai/dsh-scope";
 
 /** Cordis plugin name. */
 const name = "omd-plan";
-/** No service injection: this row only registers a scoped event listener. */
+/** No service injection: this row only registers scoped event listeners. */
 const inject = [];
 
 /** Plan directory segments relative to the session workspace root (cwd). */
@@ -94,12 +100,63 @@ function isSubagent(agent) {
   );
 }
 
+/** Fold the session's plan/mode events (last one wins); mirror mode.ts. */
+function planModeActive(events) {
+  let active = false;
+  for (const event of events ?? []) {
+    if (event !== undefined && event.type === "plan/mode") {
+      active = event.data !== undefined && event.data !== null && event.data.active === true;
+    }
+  }
+  return active;
+}
+
 function apply(ctx) {
   if (scopeOf(ctx) === undefined) {
     throw new Error(
       "omd-plan: refusing to mount outside a scoped context; mount this row inside an agent preset"
     );
   }
+
+  // Scoped .md-only write guard: the planner may write/edit only markdown
+  // files, keeping it read-only for every other path. The plan file itself is
+  // written by this row via node:fs (not through the model's write/edit tools),
+  // so plan persistence is unaffected by the guard. Implemented on the
+  // tools/pre-execute gate (the row's existing ctx.on style) so no service
+  // injection is required.
+  ctx.on("tools/pre-execute", async (exec, next) => {
+    const toolName = exec !== undefined && exec !== null ? exec.name : undefined;
+    if (toolName !== "write" && toolName !== "edit") return await next();
+    const filePath =
+      exec.arguments !== undefined &&
+      exec.arguments !== null &&
+      typeof exec.arguments.file_path === "string"
+        ? exec.arguments.file_path
+        : undefined;
+    if (filePath !== undefined && filePath.toLowerCase().endsWith(".md")) return await next();
+    return {
+      kind: "deny",
+      reason:
+        "omd-plan: the planner preset may write or edit only .md files (refusing " +
+        toolName +
+        " on a non-.md path)",
+    };
+  });
+
+  // Auto-activate plan mode for the top-level planner agent. DSH leaves plan
+  // state inactive until /plan or a programmatic set, so without this the
+  // plan:policy section never renders and exit_plan_mode fails with "only
+  // available in plan mode". Mirror mode.ts's direct log append (no narration)
+  // so the planner session is in plan mode from its first request onward.
+  ctx.on("agent/pre-step", async ({ agent }, next) => {
+    if (agent !== undefined && agent !== null && !isSubagent(agent) && agent.session !== undefined && agent.session !== null) {
+      if (!planModeActive(agent.session.events)) {
+        agent.session.append("plan/mode", { active: true });
+      }
+    }
+    return await next();
+  });
+
   ctx.on("tools/post-execute", async (exec, result, next) => {
     const decision = await next();
     if (decision.kind !== "accept" || decision.value !== undefined) return decision;
