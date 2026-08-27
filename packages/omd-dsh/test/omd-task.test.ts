@@ -171,6 +171,36 @@ describe("omd-task execute", () => {
     expect(spec.request.persona).toBe("DEEP worker");
   });
 
+  it("routes the deep tier to the user's model when omd-mode recorded an override", async () => {
+    const { ctx, tool, subagents } = mount(fastDeepTiers);
+    ctx.omdModeOverride = { provider: "deepseek-official", model: "deepseek-v4-flash" };
+    await tool.execute({ description: "deep think", prompt: "design X", tier: "deep", run_in_background: false }, { agent: { id: "parent-1" }, signal: undefined });
+    const { request } = subagents.startCalls[0];
+    expect(request.agentOptions).toEqual({ provider: "deepseek-official", model: "deepseek-v4-flash" });
+    expect(request.persona).toBe("DEEP worker");
+  });
+
+  it("leaves non-deep tiers on their matrix model when an override is recorded", async () => {
+    const { ctx, tool, subagents } = mount(fastDeepTiers);
+    ctx.omdModeOverride = { provider: "deepseek-official", model: "deepseek-v4-pro" };
+    await tool.execute({ description: "scout", prompt: "find x", tier: "fast", run_in_background: false }, { agent: { id: "parent-1" }, signal: undefined });
+    expect(subagents.startCalls[0].request.agentOptions).toEqual({ provider: "deepseek-official", model: "deepseek-v4-flash" });
+  });
+
+  it("applies the override when the deep tier is the defaultTier", async () => {
+    const { ctx, tool, subagents } = mount(fastDeepTiers, { defaultTier: "deep" });
+    ctx.omdModeOverride = { provider: "other-provider", model: "user-model" };
+    await tool.execute({ description: "deep", prompt: "x", run_in_background: false }, { agent: { id: "p" }, signal: undefined });
+    expect(subagents.startCalls[0].request.agentOptions).toEqual({ provider: "other-provider", model: "user-model" });
+  });
+
+  it("keeps the configured deep model when no override is recorded", async () => {
+    const { ctx, tool, subagents } = mount(fastDeepTiers);
+    ctx.omdModeOverride = undefined;
+    await tool.execute({ description: "deep think", prompt: "design X", tier: "deep", run_in_background: false }, { agent: { id: "parent-1" }, signal: undefined });
+    expect(subagents.startCalls[0].request.agentOptions).toEqual({ provider: "deepseek-official", model: "deepseek-v4-pro" });
+  });
+
   it("falls back to defaultTier when tier is omitted", async () => {
     const { tool, subagents } = mount(fastDeepTiers, { defaultTier: "deep" });
     await tool.execute({ description: "x", prompt: "y", run_in_background: false }, { agent: { id: "p" }, signal: undefined });

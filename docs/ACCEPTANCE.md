@@ -1,6 +1,6 @@
 # 验收 Runbook 与证据记录
 
-本文档给出六类验收项的操作步骤与证据格式；实跑记录填入下方「证据记录」。
+本文档给出七类验收项的操作步骤与证据格式；实跑记录填入下方「证据记录」。
 
 ## 准备
 
@@ -49,7 +49,15 @@ dsh --profile web --port 3099
 2. 配方验证：复制 standard 为 std-pinned 并追加 omd-mode 行（见根 README），负向证明该模式被固定到所配模型。
 3. sync 重跑前后对 .agent-presets 下非 omd-* 目录做 hash 对比：必须无任何改动。
 
-## 验收 6：合规
+## 验收 7：UI 模型切换覆盖（v0.1.3+）
+
+1. omd-executor 会话先发一条消息（矩阵顶层 v4-pro 生效），随后在 UI 模型座切换到 deepseek-v4-flash。
+2. 再发一条消息：request/header 记录的 provider/model 必须变为 flash（路由跟随用户选择），persona {{model}} 同步为 flash。
+3. 在 flash 路由下调用 omd_task(tier="deep")：子代理 header 必须为 flash（deep tier 沿用用户选择）；tier="fast" 仍为矩阵配置的 fast 模型。
+4. 切换回矩阵顶层模型（v4-pro）：路由回到 v4-pro，omd_task(tier="deep") 子代理回到矩阵 deep 模型。
+5. 反向：新开 omd-executor 会话不发消息、不切模型（部署默认 ≠ v4-pro 时）：首轮 request/header 仍为 v4-pro（矩阵认领），persona {{model}} 为 v4-pro。
+
+## 合规
 
 - git remote -v 为空；git log 全部为本仓库历史；ATTRIBUTION.md / LICENSE 齐全；grep 无 OMD 原文照抄。
 

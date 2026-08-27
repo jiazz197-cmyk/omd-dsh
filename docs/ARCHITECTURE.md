@@ -37,7 +37,24 @@ waterfall 展开顺序（最外层先执行）
   omd-mode(request)  ──▶ installModelSelection(request)  ──▶ 内层路由
 ```
 
-omd-mode 的监听器在最外层：它先调用 next() 让入口监听器跑完，再把自己的 provider/model 覆盖上去——所以模式配置永远赢过会话选择，这正是「每个模式配自己的模型」。未配置 provider/model 时两个监听器完全透传（退化横幅展示），因此该行可安全挂进任何 preset。
+omd-mode 的监听器在最外层：它先调用 next() 让入口监听器跑完，再决定是否把自己的 provider/model 覆盖上去。
+
+**与 UI 模型切换的优先级（v0.1.3+）**：矩阵模型是模式的默认路由，但用户在 UI
+显式切换模型后让路。判定基于瀑布流解析出的入口选择（installModelSelection
+应用后的 resolved 值），规则：
+
+1. 入口选择 == 矩阵模型 → 钉住（无操作）；
+2. 会话 blank（无 request/header）且入口选择 == 挂载时快照的部署默认模型（d0）→
+   视为「未选择」，钉住矩阵模型。d0 必须静态快照：session.selectModel 每次都会把
+   用户选择写回全局默认（agentDefaultModel），动态读取会把用户选择误判为默认；
+3. 会话已跑过请求且「agent-preset/selected 事件在最后一次 request/header 之后」
+   （/mode 或 UI 切换刚发生，事件在 recompose 之后才入日志，因此必须每次实时计算）
+   且入口选择 == 切换前的路由 → 新模式认领矩阵模型；
+4. 其余情况（入口选择 ≠ 矩阵模型）→ 用户显式切换：请求与 persona 变量保持用户选择，
+   并在作用域 ctx 上记录 `omdModeOverride`（provider/model），omd-task 的 deep tier 沿用。
+
+子代理（subagentDepth > 0）仍一律透传（见下节），不参与判定、不更新 omdModeOverride。
+未配置 provider/model 时两个监听器完全透传（退化横幅展示），因此该行可安全挂进任何 preset。
 
 scope-only 守卫：无作用域挂载会钉死进程内所有 agent 的模型，直接拒绝（仿 dsh-persona 的先例）。
 
@@ -106,7 +123,18 @@ tier 模型（实测复现：tier 子代理的 header 显示父模式模型）�
 - omd-task 的 tier 通过显式 agentOptions 落到子代理的 AgentOptions，成为其
   路由（tier 模型 > 模式模型，实测证明）；
 - 无显式 agentOptions 的子代理按 DSH 原生语义继承父级入口选择；
-- 顶层 agent（subagentDepth 缺省/0）仍被本行钉到模式模型。
+- 顶层 agent（subagentDepth 缺省/0）默认被本行钉到模式模型；用户显式切换
+  模型后顶层跟随用户选择，且 deep tier 同步为用户选择的模型（omd-task
+  在 execute 时读取作用域 ctx 上的 `omdModeOverride`，仅替换名为 `deep`
+  的 tier 的 provider/model，其余 tier 保持矩阵配置）。
+
+已知边界（DSH 架构决定，服务端无法区分）：
+- 入口选择（`selection.current`）由 api-proxy 持有（WeakMap 闭包），preset
+  内插件不可见，只能观察瀑布流 resolved 值与会话日志；
+- 因此「blank 会话 + 用户恰好选择了挂载时的部署默认模型」与「未选择」不可区分：
+  该次请求会钉到矩阵模型，下一请求起跟随用户选择；
+- 新会话在首次请求前，UI 模型座显示部署默认模型而非矩阵模型（显示层由入口
+  持有，服务端无法改写）；首次请求后显示与实际路由一致。
 
 ## 已知约束
 

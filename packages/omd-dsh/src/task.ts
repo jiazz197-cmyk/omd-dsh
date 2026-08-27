@@ -220,7 +220,14 @@ function apply(ctx, config) {
         const parent = exec.agent;
         if (!parent) throw new Error("omd_task requires a calling agent (exec.agent was undefined)");
         const tierName = resolveTier(config, args.tier);
-        const tier = config.tiers[tierName];
+        let tier = config.tiers[tierName];
+        // 用户显式切换模型后（omd-mode 在 agent/request 让路并在作用域 ctx 上记录
+        // omdModeOverride），deep tier 改用用户选择的模型；其余 tier 保持矩阵配置。
+        const override = ctx.omdModeOverride;
+        if (tierName === "deep" && override !== undefined
+          && typeof override.provider === "string" && typeof override.model === "string") {
+          tier = { ...tier, provider: override.provider, model: override.model };
+        }
         const maxDepth = typeof config.maxDepth === "number" ? config.maxDepth : undefined;
         const request = {
           label: args.description,

@@ -15,7 +15,14 @@ OMD 理念的 DSH 插件：两个 cordis 行 + 7 个模式 preset + 同步 CLI�
 
 机制：监听 system-prompt/assemble（注入 {{provider}}/{{model}} 提示词变量）与 agent/request（next() 后覆盖路由），两处均 prepend，保证覆盖入口的会话级选择。
 
-模型体验：persona 文本每次请求固定携带该模式模型声明；模式模型路由在 agent 生命周期内稳定（KV 前缀稳定）。
+**与 UI 模型切换的优先级**：矩阵模型是模式的默认路由，但用户在 UI 显式切换模型后，本次任务的顶层路由（与 persona 展示）跟随用户选择。判定规则（依据请求瀑布流解析出的入口选择）：
+
+1. 入口选择 == 矩阵模型 → 钉住矩阵模型（无操作）；
+2. 会话尚无任何请求（blank）且入口选择 == 挂载时的部署默认模型 → 视为未选择，钉住矩阵模型；
+3. 会话已跑过请求且刚发生 preset 切换（/mode 或 UI 选择，日志中 agent-preset/selected 在最后一次 request/header 之后）且入口选择 == 切换前的路由 → 新模式认领矩阵模型；
+4. 其余情况 → 入口选择与矩阵模型不同 = 用户显式切换：请求与 persona 变量均保持用户选择，本行在作用域 ctx 上记录 `omdModeOverride`（provider/model），omd-task 行据此把 deep tier 路由到用户选择的模型。
+
+模型体验：persona 文本每次请求固定携带实际路由模型的声明；模式模型路由在 agent 生命周期内稳定（KV 前缀稳定）。
 
 ## 行：omd-task
 
@@ -31,6 +38,8 @@ tier 差异化子代理委派（等价 OMD 的 task(category=…)）。仅限 pr
 | maxDepth | 3 | 委派深度上限；provider-managed 表示交提供方 |
 
 模型可见参数：description（展示名）、prompt、tier（枚举见工具描述）、run_in_background（仅 continuable 模式）。工具描述枚举各 tier 的 hint 与模型，模型据此选型。
+
+**deep tier 与用户模型覆盖**：用户在 UI 显式切换模型后（omd-mode 让路并记录 `ctx.omdModeOverride`），名为 `deep` 的 tier 改用用户选择的模型（provider/model 整体替换），其余 tier 保持矩阵配置。
 
 ## CLI：omd-dsh
 
@@ -62,7 +71,8 @@ npm pack        # prepack 自动重建，产出 tgz
 ### 子代理透传语义
 
 omd-mode 对 subagentDepth > 0 的子代理一律透传（不覆盖 provider/model/变量）：
-omd-task 的 tier 模型通过显式 agentOptions 生效；顶层 agent 才被钉到模式模型。
+omd-task 的 tier 模型通过显式 agentOptions 生效；顶层 agent 才被钉到模式模型
+（除非用户显式切换模型——此时顶层跟随用户选择，deep tier 通过 `ctx.omdModeOverride` 同步）。
 这保证「强模型顶层 + tier 差异化子代理」的优先级正确。
 
 ### toolFilter 注意
