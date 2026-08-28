@@ -1,6 +1,6 @@
 {
   "name": "@carljia/omd-dsh",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "OMD 理念的 DeepSeek Harness 插件：模式能力边界 + 按模式配模型 + tier 差异化子代理委派",
   "keywords": [
     "deepseek-harness",
