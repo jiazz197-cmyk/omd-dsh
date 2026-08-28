@@ -44,15 +44,24 @@ omd-dsh **不重复造轮子**，它是一层很薄的「接线 + 组织」：�
 
 **前置要求**：已装 DeepSeek Harness（`dsh`）、Node.js ≥ 20。
 
-### 方式一：npm（推荐）
+### 方式一：dsh plugin（推荐，一键）
+
+```bash
+dsh plugin --profile web add @carljia/omd-dsh
+```
+
+装完**重启 `dsh web`**：插件在启动时自动把 7 个模式写入 `~/.dsh/.agent-presets` 并生成模型矩阵，preset 选择器里直接就能选，无需再手动 `omd-dsh sync`。
+
+> `dsh plugin` 本质是转发给 pnpm（即从 npm 装包）。本插件声明了 `dsh.bundle`，因此会被自动登记为 profile 层并在启动时生效（boot 行做幂等同步 + 导入改写）。
+
+### 方式二：npm 全局安装
 
 ```bash
 npm i -g @carljia/omd-dsh
+omd-dsh sync   # 手动把 7 个模式写入 ~/.dsh/.agent-presets（bundle 安装时这一步自动完成）
 ```
 
-装完 `omd-dsh` 命令直接可用，无需其它步骤。
-
-### 方式二：从源码（GitHub clone）
+### 方式三：从源码（GitHub clone）
 
 ```bash
 git clone https://github.com/jiazz197-cmyk/omd-dsh.git
@@ -63,10 +72,10 @@ npm link        # 全局 omd-dsh 命令
 
 ## 使用
 
-> ⚠️ **先同步，再使用**：安装只给你 `omd-dsh` 命令本身。必须跑一次 `omd-dsh sync`（或 `omd-dsh setup`）把 7 个 preset 写入 `~/.dsh/.agent-presets`，然后**重启 `dsh web`**——preset 选择器里才会出现这些模式、才能正常用。没同步之前，模式是「看不见也选不到」的。
+> **安装后即可用**：`dsh plugin add` 装完重启，7 个模式会自动出现（启动时已同步）。用 `npm i -g` 安装的，先跑一次 `omd-dsh sync` 再重启 `dsh web`。改模型用 `omd-dsh setup`。
 
 ```bash
-omd-dsh sync    # 把 7 个模式写入 ~/.dsh/.agent-presets
+omd-dsh sync    # 手动把 7 个模式写入 ~/.dsh/.agent-presets（bundle 安装时启动已自动执行）
 omd-dsh setup   # 交互式：逐模式 / 逐 tier 选模型，再同步
 omd-dsh models  # 列出发现的模型
 ```

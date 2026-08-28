@@ -1,6 +1,6 @@
 {
   "name": "@carljia/omd-dsh",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "OMD 理念的 DeepSeek Harness 插件：模式能力边界 + 按模式配模型 + tier 差异化子代理委派",
   "keywords": [
     "deepseek-harness",
@@ -35,15 +35,25 @@
       "types": "./lib/task.d.ts",
       "default": "./lib/task.js"
     },
+    "./boot": {
+      "types": "./lib/boot.d.ts",
+      "default": "./lib/boot.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
     "omd-dsh": "lib/cli.js"
   },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "files": [
     "lib",
     "presets",
     "omd-matrix.default.json",
+    "cordis.patch.yml",
     "README.md",
     "LICENSE"
   ],

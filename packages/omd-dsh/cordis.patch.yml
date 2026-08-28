@@ -1,0 +1,10 @@
+# omd-dsh bundle patch: inject the boot row that, on startup, materializes
+# the 7 OMD agent presets into the user preset root (<DSH_HOME>/.agent-presets).
+#
+# The boot row (lib/boot.js) resolves the harness tree, copies the presets and
+# the vendored row modules, rewrites their @deepseek-ai/* imports to the harness,
+# and generates the model matrix on first run — idempotently. Install with:
+#   dsh plugin --profile web add @carljia/omd-dsh   # then restart dsh.
+- insert:
+    - id: omd-dsh
+      name: '@carljia/omd-dsh/boot'

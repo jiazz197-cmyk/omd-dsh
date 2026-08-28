@@ -1,6 +1,10 @@
 # @carljia/omd-dsh
 
-OMD 理念的 DSH 插件：两个 cordis 行 + 7 个模式 preset + 同步 CLI。总览、模式矩阵与安装见仓库根 [README.md](../../README.md)。
+OMD 理念的 DSH 插件：两个 cordis 行 + 7 个模式 preset + 同步 CLI。以 `dsh.bundle` 形式分发——`dsh plugin add @carljia/omd-dsh` 安装后重启即自动同步预设；也可全局安装后用 `omd-dsh sync`。总览、模式矩阵与安装见仓库根 [README.md](../../README.md)。
+
+## 分发：bundle + boot 行
+
+包声明 `dsh.bundle.patch` → `cordis.patch.yml`，后者注入宿主行 `@carljia/omd-dsh/boot`。该行在 profile 启动时执行与 `omd-dsh sync` 相同的内核（`lib/sync.js`）：定位 harness、渲染并复制 7 个 preset 与 `.omd-vendor/` 行模块、把行模块的 `@deepseek-ai/*` 导入改写为 harness 树的 `file://` URL、首次生成 `omd-matrix.json`。全程幂等、hash 保护、不覆盖本地修改。
 
 ## 行：omd-mode
 
