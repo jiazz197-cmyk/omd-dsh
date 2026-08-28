@@ -1,5 +1,6 @@
 import z from "@deepseek-ai/schemastery";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
+import { setModeOverride } from "./shared.js";
 
 /**
  * @module @carljia/omd-dsh
@@ -32,8 +33,8 @@ import { scopeOf } from "@deepseek-ai/dsh-scope";
  *   - otherwise the user explicitly picked a
  *     different model                            -> yield: the request and
  *       the persona variables keep the user's selection, and the row
- *       records it on the scoped context as `omdModeOverride` so the
- *       omd-task row can route the "deep" tier to the user's model.
+ *       records it (shared.ts, keyed by the agent) so the omd-task row can
+ *       route the "deep" tier to the user's model.
  *
  * When provider/model are not configured the row passes everything
  * through and only serves the persona banner variables (inheriting the
@@ -111,7 +112,8 @@ function apply(ctx, config) {
   } catch { /* 读不到默认时退化为仅 entry == pinned 判定 */ }
 
   // 供同 preset 内的 omd-task 行读取：用户显式切换模型后（本行让路），deep tier 沿用用户选择。
-  ctx.omdModeOverride = undefined;
+  // 注意：不能直接往 cordis 作用域 ctx 上写属性（Proxy 会抛 "without provide"，且行间
+  // ctx 互不可见），因此共享状态放在 shared.ts 的 WeakMap 里，按顶层 agent 对象为键。
 
   /**
    * 判定一次入口选择是否应钉到模式模型（true），还是让路给用户选择（false）。
@@ -164,7 +166,7 @@ function apply(ctx, config) {
     const agent = _payload && _payload.agent;
     if (pinned === undefined || isSubagent(agent)) return resolved;
     if (shouldPin(agent, { provider: resolved.provider, model: resolved.model })) {
-      ctx.omdModeOverride = undefined;
+      setModeOverride(agent, undefined);
       const stripped = { ...resolved };
       delete stripped.reasoningEffort;
       const out = {
@@ -178,7 +180,7 @@ function apply(ctx, config) {
       return out;
     }
     // 用户显式选择了别的模型：本次任务顶层路由用用户选择；deep tier 同步（omd-task 读取）。
-    ctx.omdModeOverride = { provider: resolved.provider, model: resolved.model };
+    setModeOverride(agent, { provider: resolved.provider, model: resolved.model });
     return resolved;
   }, { prepend: true });
 }

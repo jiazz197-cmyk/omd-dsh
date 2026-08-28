@@ -19,7 +19,8 @@ subagent_router/
 ├── omd-executor/ ... omd-chat/       # 7 个模式（含 .omd-meta.json）
 └── .omd-vendor/                      # 点前缀目录，preset 发现会跳过
     ├── omd-mode.mjs                 # 导入已改写为 harness 树 file:// URL
-    └── omd-task.mjs
+    ├── omd-task.mjs
+    └── shared.js                    # 两行共享的按 agent 键控状态（WeakMap），无导入
 ```
 
 ## omd-mode：按模式配模型的机制
@@ -51,7 +52,11 @@ omd-mode 的监听器在最外层：它先调用 next() 让入口监听器跑完
    （/mode 或 UI 切换刚发生，事件在 recompose 之后才入日志，因此必须每次实时计算）
    且入口选择 == 切换前的路由 → 新模式认领矩阵模型；
 4. 其余情况（入口选择 ≠ 矩阵模型）→ 用户显式切换：请求与 persona 变量保持用户选择，
-   并在作用域 ctx 上记录 `omdModeOverride`（provider/model），omd-task 的 deep tier 沿用。
+   并在共享状态（.omd-vendor/shared.js 的 WeakMap，键为顶层 agent 对象）上记录用户选择，
+   omd-task 的 deep tier 沿用。注意不能往 cordis 作用域 ctx 上写自定义属性：
+   ctx 是 Proxy，未声明属性赋值会抛 "cannot set property ... without provide"
+   （曾导致全部 omd preset 挂载失败），且同一 preset 内各行 ctx 是兄弟节点、互不可见；
+   因此共享状态必须走两个行模块共同 import 的共享模块。
 
 子代理（subagentDepth > 0）仍一律透传（见下节），不参与判定、不更新 omdModeOverride。
 未配置 provider/model 时两个监听器完全透传（退化横幅展示），因此该行可安全挂进任何 preset。
@@ -125,8 +130,8 @@ tier 模型（实测复现：tier 子代理的 header 显示父模式模型）�
 - 无显式 agentOptions 的子代理按 DSH 原生语义继承父级入口选择；
 - 顶层 agent（subagentDepth 缺省/0）默认被本行钉到模式模型；用户显式切换
   模型后顶层跟随用户选择，且 deep tier 同步为用户选择的模型（omd-task
-  在 execute 时读取作用域 ctx 上的 `omdModeOverride`，仅替换名为 `deep`
-  的 tier 的 provider/model，其余 tier 保持矩阵配置）。
+  在 execute 时读取 shared.ts 的 WeakMap（键为调用 agent 对象）上的用户选择，
+  仅替换名为 `deep` 的 tier 的 provider/model，其余 tier 保持矩阵配置）。
 
 已知边界（DSH 架构决定，服务端无法区分）：
 - 入口选择（`selection.current`）由 api-proxy 持有（WeakMap 闭包），preset

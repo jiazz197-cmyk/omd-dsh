@@ -31,7 +31,7 @@ import { createInterface } from "node:readline/promises";
  */
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const VENDOR_SOURCES = ["omd-mode.mjs", "omd-task.mjs", "omd-ulw.mjs", "omd-plan.mjs", "omd-start-work.mjs", "omd-mode-switch.mjs"];
+const VENDOR_SOURCES = ["omd-mode.mjs", "omd-task.mjs", "omd-ulw.mjs", "omd-plan.mjs", "omd-start-work.mjs", "omd-mode-switch.mjs", "shared.js"];
 /** User-owned model matrix: lives under DSH_HOME, never inside the package or the repo. */
 const MATRIX_PATH = join(dshHome(), "omd-matrix.json");
 /** Pre-migration location (package root) — migrated to MATRIX_PATH once when present. */

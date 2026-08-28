@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import z from "@deepseek-ai/schemastery";
 import { Config, apply, name, inject } from "../src/index";
+import { modeOverrideFor } from "../src/shared";
 
 interface Listener { cb: (payload: any, ctx: any, next: () => Promise<any>) => Promise<any>; opts: any }
 
@@ -93,11 +94,10 @@ describe("omd-mode apply", () => {
     }
   });
 
-  it("clears the shared omdModeOverride at mount", () => {
+  it("mounts without recording any override", () => {
     const { ctx } = fakeCtx();
-    ctx.omdModeOverride = { provider: "x", model: "y" };
     apply(ctx, validConfig as any);
-    expect(ctx.omdModeOverride).toBeUndefined();
+    expect(modeOverrideFor({ key: "probe" } as any)).toBeUndefined();
   });
 
   it("snapshots the deployment default for the blank-session decision", async () => {
@@ -170,7 +170,7 @@ describe("omd-mode request routing", () => {
     const { agent } = fakeAgent([headerEvent(0, "deepseek-official", "deepseek-v4-pro")]);
     const result = await requestListener.cb({ agent }, async () => ({ provider: "deepseek-official", model: "deepseek-v4-pro", reasoningEffort: "high", maxTokens: 128 }));
     expect(result).toEqual({ provider: "deepseek-official", model: "deepseek-v4-pro", maxTokens: 128 });
-    expect(ctx.omdModeOverride).toBeUndefined();
+    expect(modeOverrideFor(agent)).toBeUndefined();
   });
 
   it("keeps a configured reasoningEffort when pinning", async () => {
@@ -189,7 +189,7 @@ describe("omd-mode request routing", () => {
     const { agent } = fakeAgent([headerEvent(0, "deepseek-official", "deepseek-v4-pro")]);
     const result = await requestListener.cb({ agent }, async () => ({ provider: "deepseek-official", model: "deepseek-v4-flash", reasoningEffort: "low" }));
     expect(result).toEqual({ provider: "deepseek-official", model: "deepseek-v4-flash", reasoningEffort: "low" });
-    expect(ctx.omdModeOverride).toEqual({ provider: "deepseek-official", model: "deepseek-v4-flash" });
+    expect(modeOverrideFor(agent)).toEqual({ provider: "deepseek-official", model: "deepseek-v4-flash" });
   });
 
   it("pins the matrix model on a blank session whose entry selection is the deployment default", async () => {
@@ -199,7 +199,7 @@ describe("omd-mode request routing", () => {
     const { agent } = fakeAgent();
     const result = await requestListener.cb({ agent }, async () => ({ provider: "deepseek-official", model: "deepseek-v4-flash" }));
     expect(result.model).toBe("deepseek-v4-pro");
-    expect(ctx.omdModeOverride).toBeUndefined();
+    expect(modeOverrideFor(agent)).toBeUndefined();
   });
 
   it("yields to a pre-first-request pick on a blank session (differs from the default)", async () => {
@@ -209,7 +209,7 @@ describe("omd-mode request routing", () => {
     const { agent } = fakeAgent();
     const result = await requestListener.cb({ agent }, async () => ({ provider: "deepseek-official", model: "Qwen/Qwen3.8-27B-FP8" }));
     expect(result.model).toBe("Qwen/Qwen3.8-27B-FP8");
-    expect(ctx.omdModeOverride).toEqual({ provider: "deepseek-official", model: "Qwen/Qwen3.8-27B-FP8" });
+    expect(modeOverrideFor(agent)).toEqual({ provider: "deepseek-official", model: "Qwen/Qwen3.8-27B-FP8" });
   });
 
   it("claims the matrix model after a /mode switch while the session still resolves the pre-switch route", async () => {
@@ -220,7 +220,7 @@ describe("omd-mode request routing", () => {
     const { agent } = fakeAgent([headerEvent(0, "deepseek-official", "deepseek-v4-pro"), switchEvent(1)]);
     const result = await requestListener.cb({ agent }, async () => ({ provider: "deepseek-official", model: "deepseek-v4-pro" }));
     expect(result.model).toBe("deepseek-v4-flash");
-    expect(ctx.omdModeOverride).toBeUndefined();
+    expect(modeOverrideFor(agent)).toBeUndefined();
   });
 
   it("yields to a user pick made after a /mode switch", async () => {
@@ -230,7 +230,7 @@ describe("omd-mode request routing", () => {
     const { agent } = fakeAgent([headerEvent(0, "deepseek-official", "deepseek-v4-pro"), switchEvent(1)]);
     const result = await requestListener.cb({ agent }, async () => ({ provider: "deepseek-official", model: "Qwen/Qwen3.8-27B-FP8" }));
     expect(result.model).toBe("Qwen/Qwen3.8-27B-FP8");
-    expect(ctx.omdModeOverride).toEqual({ provider: "deepseek-official", model: "Qwen/Qwen3.8-27B-FP8" });
+    expect(modeOverrideFor(agent)).toEqual({ provider: "deepseek-official", model: "Qwen/Qwen3.8-27B-FP8" });
   });
 
   it("does not treat a stale switch as fresh (resume: the switch precedes the last request)", async () => {
@@ -265,7 +265,7 @@ describe("omd-mode request routing", () => {
     expect(result.provider).toBe("session-provider");
     expect(result.model).toBe("session-model");
     expect(result.reasoningEffort).toBe("high");
-    expect(ctx.omdModeOverride).toBeUndefined();
+    expect(modeOverrideFor({ key: "probe" } as any)).toBeUndefined();
   });
 });
 

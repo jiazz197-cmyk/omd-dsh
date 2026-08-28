@@ -2,6 +2,7 @@ import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { assertSubagentMaxDepth } from "@deepseek-ai/dsh-subagent";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
+import { modeOverrideFor } from "./shared.js";
 
 /**
  * @module @carljia/omd-dsh/task
@@ -221,9 +222,9 @@ function apply(ctx, config) {
         if (!parent) throw new Error("omd_task requires a calling agent (exec.agent was undefined)");
         const tierName = resolveTier(config, args.tier);
         let tier = config.tiers[tierName];
-        // 用户显式切换模型后（omd-mode 在 agent/request 让路并在作用域 ctx 上记录
-        // omdModeOverride），deep tier 改用用户选择的模型；其余 tier 保持矩阵配置。
-        const override = ctx.omdModeOverride;
+        // 用户显式切换模型后（omd-mode 在 agent/request 让路并把用户选择记入 shared.ts，
+        // 键为顶层 agent 对象），deep tier 改用用户选择的模型；其余 tier 保持矩阵配置。
+        const override = modeOverrideFor(parent);
         if (tierName === "deep" && override !== undefined
           && typeof override.provider === "string" && typeof override.model === "string") {
           tier = { ...tier, provider: override.provider, model: override.model };

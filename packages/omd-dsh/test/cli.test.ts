@@ -87,10 +87,14 @@ describe("omd-dsh sync CLI", () => {
       const importLines = text.split(/\r?\n/).filter((l) => l.trimStart().startsWith("import"));
       expect(importLines.length).toBeGreaterThan(0);
       for (const line of importLines) {
+        // the sibling shared.js import stays relative (resolves inside .omd-vendor)
+        if (/from\s+["']\.\//.test(line)) continue;
         expect(line).toContain("file:///");
         expect(line).not.toMatch(/["']@deepseek-ai\//);
       }
     }
+    // the shared per-agent state module ships next to the rows
+    expect(existsSync(join(h, ".agent-presets", ".omd-vendor", "shared.js"))).toBe(true);
     // preset rows reference the vendored files relatively
     const chatYml = await fs.readFile(join(h, ".agent-presets", "omd-chat", "agent.cordis.yml"), "utf8");
     expect(chatYml).toContain("../.omd-vendor/omd-mode.mjs");
