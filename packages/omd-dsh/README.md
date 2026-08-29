@@ -12,7 +12,7 @@ OMD 理念的 DSH 插件：host 行 + 客户端设置页 + 7 个模式 preset + 
 
 设置 → 左侧导航 →「omd模型分配」（en: OMD model allocation）可视化编辑 7 个模式的模型矩阵（顶层 provider/model + 可选 reasoningEffort；有 tier 的模式逐档展示 provider/model，tier 的 `hint` 只读展示便于理解档位用途）。保存后**新会话**按新矩阵路由模型，运行中的会话保持创建时的组合。
 
-数据流（详见 docs/ARCHITECTURE.md「settings 命名空间数据流」）：
+数据流：
 
 - `settings.yaml` 的命名空间 `omd-model-allocation` 是**在线编辑的权威存储**（宿主行注册，`base` = 随包默认矩阵 `omd-matrix.default.json`，`applies: "live"`）。
 - 启动时宿主行**调和一次**：若 `<DSH_HOME>/omd-matrix.json` 存在且与命名空间解析值不同，把文件内容 `replace` 进命名空间——旧版/CLI 的自定义不丢，CLI 手改在下次重启被采纳。
@@ -23,7 +23,7 @@ OMD 理念的 DSH 插件：host 行 + 客户端设置页 + 7 个模式 preset + 
 
 ## 行：omd-mode
 
-按模式（agent preset）固定模型路由。行模块是自包含 bundle，不再做 scope 守卫（bundle 内自带的 dsh-scope 副本读不到 harness 实例写入的 kScope Symbol，守卫会误报——见 docs/ARCHITECTURE.md）；请按 preset 组合挂载，误挂到全局组合会导致进程级钉模型。
+按模式（agent preset）固定模型路由。行模块是自包含 bundle，不再做 scope 守卫（bundle 内自带的 dsh-scope 副本读不到 harness 实例写入的 kScope Symbol，守卫会误报）；请按 preset 组合挂载，误挂到全局组合会导致进程级钉模型。
 
 | 配置字段 | 含义 |
 |---|---|
@@ -70,7 +70,7 @@ omd-dsh <command> [--dry-run]
 - `omd-dsh setup` — 交互式向导：先读取 DSH 已有模型，再引导逐模式/逐 tier 选择模型，写回 `<DSH_HOME>/omd-matrix.json` 并可选立即同步。
 - `omd-dsh models` — 打印发现的 DSH 模型目录（非交互）。
 
-细节见 docs/ARCHITECTURE.md 的「vendored 分发与自包含 bundle」。
+自包含 bundle 的构建细节见仓库根 README「为什么不需要配置 harness 路径」。
 
 ## 集中配置：<DSH_HOME>/omd-matrix.json 与 settings.yaml 命名空间
 

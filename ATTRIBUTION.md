@@ -27,4 +27,4 @@
 ## 概念映射
 
 OMD 的 agent/mode/task(category) 等概念在 DSH 上的对应关系见
-[README.md](./README.md) 与 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)。
+[README.md](./README.md)。
