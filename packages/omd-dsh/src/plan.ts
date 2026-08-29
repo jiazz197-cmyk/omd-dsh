@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { scopeOf } from "@deepseek-ai/dsh-scope";
 
 /**
  * @module @carljia/omd-dsh/plan
@@ -112,11 +111,7 @@ function planModeActive(events) {
 }
 
 function apply(ctx) {
-  if (scopeOf(ctx) === undefined) {
-    throw new Error(
-      "omd-plan: refusing to mount outside a scoped context; mount this row inside an agent preset"
-    );
-  }
+  // 无 scope 守卫：见 src/index.ts 的说明（自包含 bundle 无法读取 harness 的 kScope）。
 
   // Scoped .md-only write guard: the planner may write/edit only markdown
   // files, keeping it read-only for every other path. The plan file itself is

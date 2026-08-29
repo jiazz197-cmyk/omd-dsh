@@ -9,7 +9,7 @@ subagent_router/
     ├── src/task.ts                   # omd-task 行：tier 差异化子代理委派
     ├── src/cli.ts                    # omd-dsh sync：vendored 分发 + harness 锚定
     ├── presets/omd-{7 模式}/          # agent.cordis.yml + preset.yml
-    └── lib/vendor/omd-{mode,task}.mjs # 构建产物（sync 改写导入后落盘）
+    └── lib/vendor/omd-{mode,task}.mjs # 构建产物（esbuild 自包含 bundle，sync 原样落盘）
 ```
 
 部署形态：
@@ -18,7 +18,7 @@ subagent_router/
 <DSH_HOME>/.agent-presets/           # DSH 用户 preset 根（includeUserRoot 默认开启）
 ├── omd-executor/ ... omd-chat/       # 7 个模式（含 .omd-meta.json）
 └── .omd-vendor/                      # 点前缀目录，preset 发现会跳过
-    ├── omd-mode.mjs                 # 导入已改写为 harness 树 file:// URL
+    ├── omd-mode.mjs                 # 自包含 bundle：无 @deepseek-ai 导入，与 harness 树无关
     ├── omd-task.mjs
     └── shared.js                    # 两行共享的按 agent 键控状态（WeakMap），无导入
 ```
@@ -81,17 +81,38 @@ scope-only 守卫：无作用域挂载会钉死进程内所有 agent 的模型�
 
 tier 解析顺序：显式 tier → defaultTier → 单 tier 自动选择 → 报错并列出合法 tier（模型自纠）。工具描述与 tier 参数描述里枚举全部 tier 的 hint 与模型，模型据此选型。
 
-## vendored 分发与跨树符号风险
+## vendored 分发与自包含 bundle（v0.1.8+）
 
-关键事实：dsh-scope 的 kScope 是模块局部 Symbol（cordis 的 Context 符号同理）。如果插件包被 pnpm/npm 装进 profile node_modules（与 harness 树不同实例），插件的 scopeOf 读取不到 harness 写入的标签——scope 守卫会误报、作用域监听器会失聪。
+行模块以相对路径挂在 preset 里（`../.omd-vendor/*.mjs`），与 package 解耦。**关键设计：行模块是
+自包含 bundle**——`scripts/postbuild.mjs` 用 esbuild 把 schemastery（Config）、dsh-tools
+（defineTool）、dsh-llm（createUserMessage）、dsh-subagent（assertSubagentMaxDepth）全部打进
+模块，行模块不含任何 `@deepseek-ai/*` 导入，因此 sync **不需要知道 harness 树**，也不存在
+"导入指向的树与运行进程不一致"的问题。为什么可以这样打：
 
-对策（sync 的默认路径）：
+- loader 用行模块自带的 `Config` 校验配置（schemastery schema 自包含，跨实例安全）；
+- `ctx.tools.register` 对 defineTool 的返回对象只做结构校验（name/output.schema/timeoutMs），
+  无 instanceof/symbol 依赖；
+- `createUserMessage` / `assertSubagentMaxDepth` 是纯函数/纯对象构造；
+- 行模块用到的其余能力（ctx.on / ctx.inject / ctx.get、tools/subagents/systemPrompt/commands
+  等服务）都是 harness 侧的 ctx 方法与服务，与行模块导入无关。
 
-1. 行模块以相对路径挂在 preset 里（../.omd-vendor/*.mjs），与 package 解耦；
-2. sync 把行模块中所有裸 @deepseek-ai/* 导入改写为指向 harness node_modules 的绝对 file:// URL（harness 根 = dsh 可执行文件定位，--harness 可覆盖）；
-3. 于是行模块与 harness 共享同一实例的 dsh-scope / cordis / schemastery / dsh-tools / dsh-subagent，符号单实例。
+**唯一例外：shared.js**。omd-mode 与 omd-task 共享的按 agent 键控状态（WeakMap）必须同一模块
+实例，因此它作为相对兄弟模块（`./shared.js`）原样落盘，两个 bundle 解析到同一 URL。
 
-裸包名安装（dsh plugin --profile web add <tgz>，preset 行写包名）仍可用，但需注意 profile node_modules 与 harness 树是两个实例；文档默认推荐 vendored 路径。
+**为什么移除了 scope 守卫**（index/task/mode/plan/startwork 各行的 `scopeOf(ctx)` 检查）：
+bundle 内自带的 dsh-scope 副本永远读不到 harness 实例写入的 kScope Symbol，守卫在跨实例场景
+必然误报——v0.1.4~v0.1.7 时代它曾两次导致全部 omd preset 挂载失败。事件路由不受影响：
+作用域过滤（scopeTarget）在 harness 自己的 dsh-scope 实例里运行，行监听器注册在带标签的 ctx
+上即可收到事件。代价是失去"误挂全局组合"的编译期拦截——该场景后果（进程级钉模型）立即可见，
+且 preset 组合由 sync 模板保证。裸包名行（如 `@deepseek-ai/dsh-persona`）由 harness loader
+在运行时按宿主 base 解析，天然与宿主同实例。
+
+历史（v0.1.7 及以前）：曾用"把行模块的 @deepseek-ai/* 导入改写为指向 harness 树的绝对
+file:// URL"来保证单实例，并配套 `--harness` 参数/自动检测。实测教训（2026-08-29）：dsh web
+的 bin 位于 npx 缓存树，但 agent/preset 机制（dsh-base / dsh-web-app bundles）可能从 profile
+树（profiles/node_modules，含全局 npm 安装的 junction）加载——改写目标若与运行进程实际加载
+的树不一致，kScope 符号失配，所有 omd 行挂载时报 "refusing to mount outside a scoped
+context"。自 v0.1.8 起该机制整体移除。
 
 ## sync 的写入安全
 

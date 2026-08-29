@@ -52,7 +52,7 @@ dsh plugin --profile web add @carljia/omd-dsh
 
 装完**重启 `dsh web`**：插件在启动时自动把 7 个模式写入 `~/.dsh/.agent-presets` 并生成模型矩阵，preset 选择器里直接就能选，无需再手动 `omd-dsh sync`。
 
-> `dsh plugin` 本质是转发给 pnpm（即从 npm 装包）。本插件声明了 `dsh.bundle`，因此会被自动登记为 profile 层并在启动时生效（boot 行做幂等同步 + 导入改写）。
+> `dsh plugin` 本质是转发给 pnpm（即从 npm 装包）。本插件声明了 `dsh.bundle`，因此会被自动登记为 profile 层并在启动时生效（boot 行做幂等同步；行模块是自包含 bundle，不依赖任何 harness 路径）。
 
 ### 方式二：npm 全局安装
 
@@ -80,29 +80,11 @@ omd-dsh setup   # 交互式：逐模式 / 逐 tier 选模型，再同步
 omd-dsh models  # 列出发现的模型
 ```
 
-### 定位 DSH harness（一般不用管）
+### 为什么不需要配置 harness 路径
 
-`sync` / `setup` 会自动定位 DSH 的 node_modules，依次尝试：
+`sync` / `setup` 不需要知道 DSH 装在哪里：`.omd-vendor/` 里的行模块是**自包含 bundle**（构建时把 schemastery / dsh-tools / dsh-llm / dsh-subagent 全部打进模块，见 `scripts/postbuild.mjs`），不含任何 `@deepseek-ai/*` 导入，因此不存在"导入指向的 harness 树与运行进程不一致"的问题——无论 DSH 从 npx 缓存、全局 npm 还是 profile bundles 加载 agent 机制，行模块都能挂载。preset 组合里其余的裸包名行（如 `@deepseek-ai/dsh-persona`）由 harness 自己的 loader 在运行时按宿主 base 解析，天然正确。
 
-1. `--harness` 参数（若有，并缓存）；
-2. 全局安装的 `dsh`（`where dsh` / `which dsh`）；
-3. **自动扫描 npx 缓存**（找含 `@deepseek-ai/dsh-scope` 的安装，取最近一个）。
-
-所以绝大多数情况你**什么都不用填**，直接 `omd-dsh sync` 即可。
-
-只有看到下面这个错误时，才需要手动指定 `--harness`：
-
-```
-omd-dsh sync: cannot locate the DSH harness node_modules.
-```
-
-此时填 DSH 的 node_modules 目录即可（全局装跑 `npm root -g` 能直接拿到）：
-
-```bash
-omd-dsh sync --harness "<DSH 的 node_modules 路径>"
-```
-
-> 💾 `--harness` 只需填一次：路径会缓存到 `~/.dsh/omd-dsh-harness.json`，之后自动复用。
+（旧版曾有 `--harness` 参数与"定位 DSH harness"逻辑，用于把行模块导入改写为 harness 树的绝对 URL；自 0.1.8 起改为自包含 bundle 后已移除，再也不用配置。）
 
 同步后启动 `dsh web`，preset 选择器里就会出现 7 个 OMD 模式，新建会话即可用。
 

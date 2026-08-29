@@ -1,5 +1,4 @@
 import z from "@deepseek-ai/schemastery";
-import { scopeOf } from "@deepseek-ai/dsh-scope";
 import { setModeOverride } from "./shared.js";
 
 /**
@@ -83,12 +82,10 @@ function presetSwitchedAfterLastRequest(session) {
 }
 
 function apply(ctx, config) {
-  if (scopeOf(ctx) === undefined) {
-    throw new Error(
-      "omd-mode: refusing to mount outside a scoped context (mode '" + config.mode + "'). " +
-      "Mount this row inside an agent preset; a global mount would pin the model for every agent in the process."
-    );
-  }
+  // 无 scope 守卫：本行以自包含 bundle（.omd-vendor/omd-mode.mjs）分发，bundle 内
+  // 自带的 dsh-scope 副本永远读不到 harness 实例写入的 kScope Symbol，守卫会误报
+  // （曾导致全部 omd preset 挂载失败）。preset 挂载由 harness 的 loader 保证作用域；
+  // 若误挂到全局组合，后果（进程级钉模型）立即可见。见 docs/ARCHITECTURE.md。
   const pinned: any = config.provider !== undefined && config.model !== undefined
     ? {
         provider: config.provider,

@@ -78,12 +78,6 @@ describe("omd-mode Config schema", () => {
 });
 
 describe("omd-mode apply", () => {
-  it("rejects mounting outside a scoped context", () => {
-    const { ctx } = fakeCtx();
-    ctx.__scope__ = undefined;
-    expect(() => apply(ctx, validConfig as any)).toThrow(/scoped context/);
-  });
-
   it("registers both waterfall listeners with prepend", () => {
     const { ctx, listeners } = fakeCtx();
     apply(ctx, validConfig as any);

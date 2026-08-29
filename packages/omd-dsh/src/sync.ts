@@ -1,22 +1,27 @@
-import { promises as fs, existsSync, mkdirSync, realpathSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { promises as fs, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { homedir } from "node:os";
-import { execFileSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 /**
  * omd-dsh sync core — materialize the OMD presets into <DSH_HOME>/.agent-presets.
  *
- * Shared by the CLI (\`omd-dsh sync\`) and the bundle boot row (\`dsh plugin add\`
- * + restart): locate the DSH harness node_modules, render each preset's
- * omd-mode / omd-task rows from the user's model matrix, copy the presets and
- * vendored row modules into .agent-presets, and rewrite the vendored modules'
- * bare @deepseek-ai/* imports to absolute file:// URLs into the harness tree so
- * the rows share ONE module instance with the harness (scope symbols etc.).
+ * Shared by the CLI (`omd-dsh sync`) and the bundle boot row (`dsh plugin add`
+ * + restart): render each preset's omd-mode / omd-task rows from the user's
+ * model matrix, and copy the presets plus the vendored row modules into
+ * .agent-presets.
+ *
+ * The vendored rows are SELF-CONTAINED bundles (see scripts/postbuild.mjs):
+ * every dependency is bundled in and they carry no @deepseek-ai imports, so
+ * the sync needs NO harness tree knowledge — the rows work regardless of
+ * whether the harness's agent machinery loads from an npx cache, a profile,
+ * or a global npm install, and no `--harness` configuration is ever needed.
+ * Bare package rows in the preset compositions (e.g. @deepseek-ai/dsh-persona)
+ * are resolved by the harness's own loader at runtime against the host base.
  */
 
-export type SyncFlags = { harness?: string; dryRun: boolean; verbose: boolean };
+export type SyncFlags = { dryRun: boolean; verbose: boolean };
 export interface TierConfig { provider: string; model: string; hint?: string; persona?: string; maxTokens?: number; toolFilter?: { allow?: string[]; deny?: string[]; denyShell?: boolean } }
 export interface ModeConfig { provider?: string; model?: string; reasoningEffort?: string; tiers?: Record<string, TierConfig> }
 export interface Matrix { version: number; defaults?: { provider?: string }; modes: Record<string, ModeConfig> }
@@ -35,165 +40,6 @@ const RENAMED_FROM: Record<string, string> = { "omd-architect": "omd-ultraworker
 function sha256(text: string) { return createHash("sha256").update(text).digest("hex"); }
 export function dshHome() { return process.env.DSH_HOME !== undefined && process.env.DSH_HOME !== "" ? resolve(process.env.DSH_HOME) : join(homedir(), ".dsh"); }
 
-function findNodeModules(start: string) {
-  let current = resolve(start);
-  for (;;) {
-    if (basename(current) === "node_modules") return current;
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-    current = parent;
-  }
-}
-function harnessCachePath() { return join(dshHome(), "omd-dsh-harness.json"); }
-
-/** Read the cached harness node_modules, ignoring a stale/missing entry. */
-function readCachedHarness() {
-  try {
-    const p = harnessCachePath();
-    if (!existsSync(p)) return undefined;
-    const parsed = JSON.parse(readFileSync(p, "utf8"));
-    const nm = parsed && typeof parsed === "object" ? parsed.harnessNodeModules : undefined;
-    if (typeof nm !== "string" || nm === "") return undefined;
-    if (!existsSync(join(nm, "@deepseek-ai", "dsh-scope", "package.json"))) return undefined;
-    return nm;
-  } catch { return undefined; }
-}
-
-/** Persist the resolved harness node_modules for later runs (best-effort). */
-function writeCachedHarness(harnessNodeModules: string) {
-  try {
-    writeFileSync(harnessCachePath(), JSON.stringify({ harnessNodeModules }, null, 2) + "\n", "utf8");
-  } catch { /* best-effort */ }
-}
-
-/**
- * Resolve the DSH harness node_modules:
- *   1. --harness flag (and cache it for later);
- *   2. auto-detect via the dsh executable on PATH;
- *   3. fall back to the locally cached value.
- */
-export function resolveHarness(flags: SyncFlags): string | undefined {
-  let nm: string | undefined;
-  if (flags.harness !== undefined) {
-    nm = findNodeModules(flags.harness);
-    if (nm !== undefined) {
-      try {
-        nm = realpathSync(nm);
-        writeCachedHarness(nm);
-      } catch { /* keep nm as-is */ }
-    }
-    return nm;
-  }
-  nm = locateHarnessViaDsh() ?? locateHarnessViaNpxCache() ?? readCachedHarness();
-  if (nm !== undefined) {
-    try { nm = realpathSync(nm); } catch { /* keep */ }
-  }
-  return nm;
-}
-
-/**
- * Resolve the harness node_modules from THIS module's own location, walking up
- * the Node resolution path for @deepseek-ai/dsh-scope. This is the reliable
- * anchor when the package runs as a bundle inside a DSH profile: the profile's
- * flat module fallback (or its hoisted node_modules) exposes the harness tree.
- */
-export function resolveHarnessFromSelf(): string | undefined {
-  let dir = dirname(fileURLToPath(import.meta.url));
-  for (;;) {
-    const nm = join(dir, "node_modules");
-    const scopeDir = join(nm, "@deepseek-ai", "dsh-scope");
-    if (existsSync(join(scopeDir, "package.json"))) {
-      try {
-        const real = realpathSync(scopeDir);
-        return findNodeModules(real);
-      } catch { return nm; }
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
-}
-
-function locateHarnessViaDsh() {
-  const candidates: string[] = [];
-  try {
-    const probe = process.platform === "win32" ? "where.exe" : "which";
-    const out = execFileSync(probe, ["dsh"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    for (const line of out.split(/\r?\n/)) { const t = line.trim(); if (t !== "") candidates.push(t); }
-  } catch { /* dsh not on PATH */ }
-  for (const candidate of candidates) {
-    let real = candidate;
-    try { real = realpathSync(candidate); } catch { /* keep */ }
-    const nm = findNodeModules(real);
-    if (nm !== undefined && existsSync(join(nm, "@deepseek-ai", "dsh-scope", "package.json"))) return nm;
-  }
-  return undefined;
-}
-/** Candidate npx cache roots where a non-global DSH install may live. */
-function npxCacheRoots(): string[] {
-  const roots: string[] = [];
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA;
-    if (localAppData) roots.push(join(localAppData, "npm-cache", "_npx"));
-    const appData = process.env.APPDATA;
-    if (appData) roots.push(join(appData, "npm-cache", "_npx"));
-  } else {
-    roots.push(join(homedir(), ".npm", "_npx"));
-  }
-  return roots;
-}
-
-/**
- * Best-effort scan of the npx cache for a DSH install whose node_modules
- * carries @deepseek-ai/dsh-scope. Picks the most recently touched one.
- */
-function locateHarnessViaNpxCache() {
-  const matches: { nm: string; mtime: number }[] = [];
-  for (const root of npxCacheRoots()) {
-    let entries: string[];
-    try { entries = readdirSync(root); } catch { continue; }
-    for (const entry of entries) {
-      const nm = join(root, entry, "node_modules");
-      if (!existsSync(join(nm, "@deepseek-ai", "dsh-scope", "package.json"))) continue;
-      let mtime = 0;
-      try { mtime = statSync(join(root, entry)).mtimeMs; } catch { /* keep 0 */ }
-      matches.push({ nm, mtime });
-    }
-  }
-  matches.sort((a, b) => b.mtime - a.mtime);
-  return matches.length > 0 ? matches[0].nm : undefined;
-}
-
-function resolveHarnessModule(harnessNodeModules: string, specifier: string) {
-  const segments = specifier.split("/");
-  const scope = segments[0].startsWith("@") ? segments[0] + "/" + segments[1] : segments[0];
-  const subpath = scope === specifier ? "" : specifier.slice(scope.length + 1);
-  const pkgDir = join(harnessNodeModules, ...scope.split("/"));
-  const manifestPath = join(pkgDir, "package.json");
-  if (!existsSync(manifestPath)) throw new Error("omd-dsh: cannot resolve \"" + specifier + "\" -- no package.json at " + manifestPath);
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  let entry: any;
-  const exportsMap = manifest.exports;
-  if (subpath === "" && exportsMap !== undefined && exportsMap["."] !== undefined) {
-    const dot = exportsMap["."];
-    if (typeof dot === "string") entry = dot;
-    else if (typeof dot === "object" && dot !== null) { entry = dot.node ?? dot.import ?? dot.default; if (typeof entry === "object" && entry !== null) entry = entry.node ?? entry.import ?? entry.default; }
-  }
-  if (entry === undefined && subpath === "") entry = manifest.module ?? manifest.main;
-  if (entry === undefined) entry = subpath === "" ? "index.js" : subpath;
-  else if (subpath !== "") entry = join(entry, subpath);
-  let resolvedPath = resolve(pkgDir, entry);
-  try { resolvedPath = realpathSync(resolvedPath); } catch { /* keep */ }
-  if (!existsSync(resolvedPath)) throw new Error("omd-dsh: resolved entry \"" + entry + "\" for \"" + specifier + "\" does not exist at " + resolvedPath);
-  return pathToFileURL(resolvedPath).href;
-}
-function rewriteImports(sourceText: string, harnessNodeModules: string) {
-  const specifierPattern = /@deepseek-ai\/[A-Za-z0-9@._/-]+/g;
-  return sourceText.split(/\r?\n/).map((line) => {
-    if (!line.trimStart().startsWith("import")) return line;
-    return line.replace(specifierPattern, (s) => resolveHarnessModule(harnessNodeModules, s));
-  }).join("\n");
-}
 function readMeta(dir: string) {
   const metaPath = join(dir, ".omd-meta.json");
   if (!existsSync(metaPath)) return undefined;
@@ -347,7 +193,7 @@ async function locallyModified(dir: string, meta: { files?: Record<string, any> 
   return undefined;
 }
 
-export async function runSync(flags: SyncFlags, harnessNodeModules: string, log: (msg: string) => void = console.log): Promise<void> {
+export async function runSync(flags: SyncFlags, log: (msg: string) => void = console.log): Promise<void> {
   const matrix = loadMatrix(flags, log);
   const manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, "package.json"), "utf8"));
   const sourceVersion = manifest.version;
@@ -403,8 +249,9 @@ export async function runSync(flags: SyncFlags, harnessNodeModules: string, log:
     for (const vendorName of VENDOR_SOURCES) {
       const sourceFile = join(vendorSourceDir, vendorName);
       if (!existsSync(sourceFile)) { throw new Error("omd-dsh sync: missing vendored source " + sourceFile + " -- run \`npm run build\` first"); }
-      let sourceText = await fs.readFile(sourceFile, "utf8");
-      sourceText = rewriteImports(sourceText, harnessNodeModules);
+      // Self-contained bundles: copied verbatim, no import rewriting, no
+      // harness tree knowledge (see the module doc comment).
+      const sourceText = await fs.readFile(sourceFile, "utf8");
       const sourceHash = sha256(sourceText);
       const destFile = join(vendorTargetDir, vendorName);
       let action = "synced";
@@ -422,7 +269,7 @@ export async function runSync(flags: SyncFlags, harnessNodeModules: string, log:
     }
     if (!flags.dryRun && VENDOR_SOURCES.length > 0) {
       await fs.mkdir(vendorTargetDir, { recursive: true });
-      await fs.writeFile(join(vendorTargetDir, ".omd-meta.json"), JSON.stringify({ source: "omd-dsh", sourceVersion, harnessNodeModules, files: nextVendorFiles }, null, 2) + "\n", "utf8");
+      await fs.writeFile(join(vendorTargetDir, ".omd-meta.json"), JSON.stringify({ source: "omd-dsh", sourceVersion, files: nextVendorFiles }, null, 2) + "\n", "utf8");
     }
   }
 
@@ -450,7 +297,7 @@ export async function runSync(flags: SyncFlags, harnessNodeModules: string, log:
 
   log("omd-dsh sync: DSH_HOME=" + dshHome());
   log("omd-dsh sync: matrix=" + MATRIX_PATH + " (customize the model matrix any time with \`omd-dsh setup\`)");
-  log("omd-dsh sync: harness node_modules=" + harnessNodeModules);
+  log("omd-dsh sync: vendored rows are self-contained bundles (no harness tree dependency)");
   log("omd-dsh sync: source version=" + sourceVersion + (flags.dryRun ? " (dry-run)" : ""));
   for (const key of ["synced", "updated", "skipped", "conflicts", "orphan", "removed"]) for (const line of report[key]) log("  [" + key + "] " + line);
   const summary = ["synced", "updated", "conflicts", "orphan", "removed"].map((key) => report[key].length + " " + key).join(", ");

@@ -104,11 +104,6 @@ describe("omd-task apply validation", () => {
     const { ctx } = fakeCtx({ fast: { provider: "p", model: "m", toolFilter: {} } });
     expect(() => apply(ctx, { tiers: { fast: { provider: "p", model: "m", toolFilter: {} } } } as any)).toThrow(/toolFilter/);
   });
-  it("rejects unscoped mounting", () => {
-    const { ctx } = fakeCtx(fastDeepTiers);
-    ctx.__scope__ = undefined;
-    expect(() => apply(ctx, { tiers: fastDeepTiers } as any)).toThrow(/scoped context/);
-  });
   it("asserts maxDepth when numeric", () => {
     const { ctx } = fakeCtx(fastDeepTiers);
     apply(ctx, { tiers: fastDeepTiers, maxDepth: 2 } as any);

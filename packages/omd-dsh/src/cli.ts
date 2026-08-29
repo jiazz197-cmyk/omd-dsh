@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
-  runSync, resolveHarness, loadMatrix, saveMatrix, dshHome, MATRIX_PATH,
+  runSync, loadMatrix, saveMatrix, dshHome, MATRIX_PATH,
   type SyncFlags, type Matrix,
 } from "./sync.js";
 
@@ -19,7 +19,9 @@ import {
  *
  * The sync core lives in ./sync.js and is also invoked automatically by the
  * bundle boot row (lib/boot.js), so `dsh plugin add @carljia/omd-dsh` + restart
- * installs the presets without this CLI.
+ * installs the presets without this CLI. The vendored rows are self-contained
+ * bundles: no `--harness` flag exists because the sync needs no harness tree
+ * knowledge.
  */
 
 function usage() {
@@ -30,7 +32,6 @@ function usage() {
     "    setup    interactive: discover DSH models, then guide per-mode/tier model selection",
     "    models   print the discovered DSH model catalog",
     "  options:",
-    "    --harness <path>  node_modules dir of the DSH harness install (saved locally after first use; otherwise auto-detected)",
     "    --dry-run         (sync) print planned writes without touching the filesystem",
     "    --verbose         (sync) print per-file detail",
   ].join("\n");
@@ -74,7 +75,7 @@ function splitModel(answer: string): { provider: string; model: string } {
   return { provider: "deepseek-official", model: a };
 }
 
-async function runSetup(flags: SyncFlags, harnessNodeModules: string | undefined) {
+async function runSetup(flags: SyncFlags) {
   const matrix = loadMatrix(flags);
   const { models, currentDefault } = discoverModels();
   console.log("omd-dsh setup: 发现 DSH 已有模型：");
@@ -106,11 +107,7 @@ async function runSetup(flags: SyncFlags, harnessNodeModules: string | undefined
   const syncNow = await ask("是否立即同步到 " + join(dshHome(), ".agent-presets") + "? [Y/n] ");
   rl.close();
   if (syncNow === "" || /^y/i.test(syncNow)) {
-    if (harnessNodeModules === undefined) {
-      console.error("omd-dsh setup: 无法定位 DSH harness node_modules，跳过同步。首次请运行 `omd-dsh sync --harness <路径>`（之后会自动缓存，无需重复指定）。");
-    } else {
-      await runSync(flags, harnessNodeModules);
-    }
+    await runSync(flags);
   } else {
     console.log("omd-dsh setup: 已跳过同步；稍后运行 `omd-dsh sync` 生效。");
   }
@@ -123,8 +120,7 @@ async function main() {
   let command = "";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--harness") flags.harness = argv[++i];
-    else if (arg === "--dry-run") flags.dryRun = true;
+    if (arg === "--dry-run") flags.dryRun = true;
     else if (arg === "--verbose") flags.verbose = true;
     else if (arg === "--help" || arg === "-h") { console.log(usage()); return; }
     else if (arg === "sync" || arg === "setup" || arg === "models") command = arg;
@@ -141,17 +137,11 @@ async function main() {
   }
 
   if (command === "setup") {
-    await runSetup(flags, resolveHarness(flags));
+    await runSetup(flags);
     return;
   }
 
-  const harnessNodeModules = resolveHarness(flags);
-  if (harnessNodeModules === undefined || !existsSync(join(harnessNodeModules, "@deepseek-ai", "dsh-scope", "package.json"))) {
-    console.error("omd-dsh sync: cannot locate the DSH harness node_modules.\n  - ensure the dsh executable is on PATH, or\n  - pass --harness <path to the harness node_modules directory> (saved for later runs).\n\n" + usage());
-    process.exitCode = 2;
-    return;
-  }
-  await runSync(flags, harnessNodeModules);
+  await runSync(flags);
 }
 
 main().catch((error) => {

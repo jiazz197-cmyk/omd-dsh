@@ -1,7 +1,6 @@
 import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { assertSubagentMaxDepth } from "@deepseek-ai/dsh-subagent";
-import { scopeOf } from "@deepseek-ai/dsh-scope";
 import { modeOverrideFor } from "./shared.js";
 
 /**
@@ -144,9 +143,7 @@ function resolveTier(config, requested) {
 }
 
 function apply(ctx, config) {
-  if (scopeOf(ctx) === undefined) {
-    throw new Error("omd-task: refusing to mount outside a scoped context; mount this row inside an agent preset");
-  }
+  // 无 scope 守卫：见 src/index.ts 的说明（自包含 bundle 无法读取 harness 的 kScope）。
   const invalid = configError(config);
   if (invalid !== undefined) throw new Error(invalid);
   if (config.maxDepth !== "provider-managed") assertSubagentMaxDepth(config.maxDepth);

@@ -1,5 +1,4 @@
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
-import { scopeOf } from "@deepseek-ai/dsh-scope";
 
 /**
  * @module @carljia/omd-dsh/mode
@@ -133,11 +132,7 @@ async function executeSwitch(ctx, invocation) {
 }
 
 function apply(ctx) {
-  if (scopeOf(ctx) === undefined) {
-    throw new Error(
-      "omd-mode-switch: refusing to mount outside a scoped context; mount this row inside an agent preset"
-    );
-  }
+  // 无 scope 守卫：见 src/index.ts 的说明（自包含 bundle 无法读取 harness 的 kScope）。
   ctx.inject(["commands"], (commandCtx) => {
     commandCtx.commands.register({
       name: "mode",

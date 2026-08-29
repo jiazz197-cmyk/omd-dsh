@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { promises as fs, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { promises as fs, existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
@@ -8,24 +8,6 @@ import { fileURLToPath } from "node:url";
 
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = join(pkgRoot, "lib", "cli.js");
-
-/** Portable fake harness tree: enough package.json manifests for the import rewriter. */
-const FAKE_PACKAGES = ["dsh-scope", "schemastery", "dsh-tools", "dsh-subagent", "dsh-llm"];
-
-async function makeFakeHarness() {
-  const root = mkdtempSync(join(tmpdir(), "omd-harness-"));
-  for (const pkgName of FAKE_PACKAGES) {
-    const dir = join(root, "node_modules", "@deepseek-ai", pkgName);
-    await fs.mkdir(join(dir, "lib"), { recursive: true });
-    await fs.writeFile(join(dir, "package.json"), JSON.stringify({
-      name: "@deepseek-ai/" + pkgName,
-      version: "0.1.1-rc.2",
-      exports: { ".": { types: "./lib/types/index.d.ts", default: "./lib/index.js" } },
-    }) + "\n", "utf8");
-    await fs.writeFile(join(dir, "lib", "index.js"), "export {};\n", "utf8");
-  }
-  return join(root, "node_modules");
-}
 
 function runSync(args: string[], env: Record<string, string>) {
   return execFileSync(process.execPath, [cliPath, "sync", ...args], {
@@ -36,7 +18,6 @@ function runSync(args: string[], env: Record<string, string>) {
 }
 
 describe("omd-dsh sync CLI", () => {
-  let harness: string;
   let home: string;
 
   // The user matrix lives in DSH_HOME; hide any repo-root matrix so the sync
@@ -45,7 +26,6 @@ describe("omd-dsh sync CLI", () => {
   const repoMatrixBackup = repoMatrix + ".testbak";
 
   beforeAll(async () => {
-    harness = await makeFakeHarness();
     try {
       await fs.rename(repoMatrix, repoMatrixBackup);
     } catch { /* no repo matrix present */ }
@@ -63,7 +43,7 @@ describe("omd-dsh sync CLI", () => {
 
   it("dry-run reports planned writes and touches nothing", async () => {
     const h = await setup();
-    const out = runSync(["--harness", harness, "--dry-run"], { DSH_HOME: h });
+    const out = runSync(["--dry-run"], { DSH_HOME: h });
     expect(out).toContain("(dry-run)");
     expect(out).toContain("[synced]");
     expect(out).toContain("omd-chat");
@@ -71,9 +51,9 @@ describe("omd-dsh sync CLI", () => {
     expect(existsSync(join(h, "omd-matrix.json"))).toBe(false);
   });
 
-  it("syncs presets and rewrites vendored imports to harness file URLs", async () => {
+  it("syncs presets with no harness knowledge and no --harness flag", async () => {
     const h = await setup();
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(out).toContain("[synced]");
     // all 7 presets materialised
     for (const preset of ["omd-executor", "omd-ultraworker", "omd-planner", "omd-reviewer", "omd-explorer", "omd-librarian", "omd-chat"]) {
@@ -81,20 +61,25 @@ describe("omd-dsh sync CLI", () => {
       expect(existsSync(join(h, ".agent-presets", preset, "preset.yml"))).toBe(true);
       expect(existsSync(join(h, ".agent-presets", preset, ".omd-meta.json"))).toBe(true);
     }
-    // vendored rows rewritten to file:// URLs anchored at the harness tree
-    for (const vendor of ["omd-mode.mjs", "omd-task.mjs"]) {
+    // vendored rows are self-contained bundles: no @deepseek-ai imports (which
+    // would need a harness-tree rewrite); only relative siblings and node
+    // builtins are allowed. A bundle may have zero imports (fully inlined).
+    for (const vendor of ["omd-mode.mjs", "omd-task.mjs", "omd-mode-switch.mjs", "omd-plan.mjs"]) {
       const text = await fs.readFile(join(h, ".agent-presets", ".omd-vendor", vendor), "utf8");
       const importLines = text.split(/\r?\n/).filter((l) => l.trimStart().startsWith("import"));
-      expect(importLines.length).toBeGreaterThan(0);
       for (const line of importLines) {
-        // the sibling shared.js import stays relative (resolves inside .omd-vendor)
+        expect(line).not.toMatch(/@deepseek-ai\//);
         if (/from\s+["']\.\//.test(line)) continue;
-        expect(line).toContain("file:///");
-        expect(line).not.toMatch(/["']@deepseek-ai\//);
+        expect(line).toMatch(/from\s+["']node:/);
       }
     }
-    // the shared per-agent state module ships next to the rows
+    // the shared per-agent state module ships next to the rows, and both rows
+    // reference it by the same relative specifier
     expect(existsSync(join(h, ".agent-presets", ".omd-vendor", "shared.js"))).toBe(true);
+    const modeText = await fs.readFile(join(h, ".agent-presets", ".omd-vendor", "omd-mode.mjs"), "utf8");
+    const taskText = await fs.readFile(join(h, ".agent-presets", ".omd-vendor", "omd-task.mjs"), "utf8");
+    expect(modeText).toContain('from "./shared.js"');
+    expect(taskText).toContain('from "./shared.js"');
     // preset rows reference the vendored files relatively
     const chatYml = await fs.readFile(join(h, ".agent-presets", "omd-chat", "agent.cordis.yml"), "utf8");
     expect(chatYml).toContain("../.omd-vendor/omd-mode.mjs");
@@ -102,18 +87,18 @@ describe("omd-dsh sync CLI", () => {
 
   it("is idempotent on a second run", async () => {
     const h = await setup();
-    runSync(["--harness", harness], { DSH_HOME: h });
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    runSync([], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(out).toContain("(up to date)");
     expect(out).not.toContain("[conflicts]");
   });
 
   it("never overwrites locally modified files (conflict protection)", async () => {
     const h = await setup();
-    runSync(["--harness", harness], { DSH_HOME: h });
+    runSync([], { DSH_HOME: h });
     const target = join(h, ".agent-presets", "omd-chat", "agent.cordis.yml");
     await fs.writeFile(target, "# my local edit\n", "utf8");
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(out).toContain("[conflicts]");
     expect(await fs.readFile(target, "utf8")).toBe("# my local edit\n");
     // unmodified sibling files still update
@@ -129,7 +114,7 @@ describe("omd-dsh sync CLI", () => {
     const orphanDir = join(h, ".agent-presets", "omd-legacy");
     await fs.mkdir(orphanDir, { recursive: true });
     await fs.writeFile(join(orphanDir, ".omd-meta.json"), JSON.stringify({ source: "omd-dsh", sourceVersion: "0.0.1", files: {} }), "utf8");
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(await fs.readFile(join(customDir, "agent.cordis.yml"), "utf8")).toBe("custom");
     expect(out).toContain("[orphan] omd-legacy");
   });
@@ -157,9 +142,9 @@ describe("omd-dsh sync CLI", () => {
 
   it("removes an unmodified preset that was renamed (rename migration)", async () => {
     const h = await setup();
-    runSync(["--harness", harness], { DSH_HOME: h });
+    runSync([], { DSH_HOME: h });
     const oldDir = await plantOldArchitect(h);
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(out).toContain("[removed] omd-architect");
     expect(out).toContain("renamed to omd-ultraworker");
     expect(existsSync(oldDir)).toBe(false);
@@ -168,10 +153,10 @@ describe("omd-dsh sync CLI", () => {
 
   it("keeps a renamed preset the user modified locally", async () => {
     const h = await setup();
-    runSync(["--harness", harness], { DSH_HOME: h });
+    runSync([], { DSH_HOME: h });
     const oldDir = await plantOldArchitect(h);
     await fs.writeFile(join(oldDir, "agent.cordis.yml"), "# user edit\n", "utf8");
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(out).toContain("[conflicts] omd-architect");
     expect(out).toContain("keeping your version");
     expect(existsSync(oldDir)).toBe(true);
@@ -180,7 +165,7 @@ describe("omd-dsh sync CLI", () => {
 
   it("generates a default matrix in DSH_HOME on first sync", async () => {
     const h = await setup();
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(out).toContain("generated");
     expect(out).toContain("omd-matrix.json");
     expect(out).toContain("omd-dsh setup");
@@ -202,21 +187,21 @@ describe("omd-dsh sync CLI", () => {
       },
     };
     await fs.writeFile(repoMatrix, JSON.stringify(sentinel, null, 2) + "\n", "utf8");
-    const out = runSync(["--harness", harness], { DSH_HOME: h });
+    const out = runSync([], { DSH_HOME: h });
     expect(out).toContain("migrated");
     const matrix = JSON.parse(await fs.readFile(join(h, "omd-matrix.json"), "utf8"));
     expect(matrix.modes.executor.model).toBe("sentinel-model");
     await fs.rm(repoMatrix, { force: true });
   });
 
-  it("fails with guidance when the harness cannot be located", async () => {
+  it("rejects the removed --harness flag with usage", async () => {
     const h = await setup();
     try {
-      runSync(["--harness", join(h, "does-not-exist")], { DSH_HOME: h });
+      runSync(["--harness", join(h, "anything")], { DSH_HOME: h });
       expect.unreachable("should have failed");
     } catch (error: any) {
       const text = String(error.stderr ?? error.stdout ?? error.message);
-      expect(text).toContain("--harness");
+      expect(text).toContain("unknown argument");
     }
   });
 });

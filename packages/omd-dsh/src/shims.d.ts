@@ -1,15 +1,9 @@
 // 构建期类型 shim：本包不随源码安装 @deepseek-ai/* 依赖（peerDependencies），
-// 类型仅用于编译检查；运行时由 harness 树解析（vendored 分发由 sync 改写为
-// 指向 harness 的绝对 file:// 导入）。
+// 类型仅用于编译检查；行模块运行时被打包进自包含 bundle（scripts/postbuild.mjs），
+// 不再从 harness 树解析任何 @deepseek-ai 模块。
 declare module "@deepseek-ai/schemastery" {
   const z: any;
   export default z;
-}
-
-declare module "@deepseek-ai/dsh-scope" {
-  export function scopeOf(ctx: any): any;
-  export function createScope(ctx: any, key: any, options?: any): any;
-  export function scopeTarget(base: any, key: any): any;
 }
 
 declare module "@deepseek-ai/dsh-tools" {
