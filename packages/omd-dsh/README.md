@@ -1,12 +1,25 @@
 # @carljia/omd-dsh
 
-OMD 理念的 DSH 插件：两个 cordis 行 + 7 个模式 preset + 同步 CLI。以 `dsh.bundle` 形式分发——`dsh plugin add @carljia/omd-dsh` 安装后重启即自动同步预设；也可全局安装后用 `omd-dsh sync`。总览、模式矩阵与安装见仓库根 [README.md](../../README.md)。
+OMD 理念的 DSH 插件：host 行 + 客户端设置页 + 7 个模式 preset + 同步 CLI。以 `dsh.bundle` 形式分发——`dsh plugin add @carljia/omd-dsh` 安装后重启即自动同步预设，并在设置面板出现「omd模型分配」页；也可全局安装后用 `omd-dsh sync`。总览、模式矩阵与安装见仓库根 [README.md](../../README.md)。
 
-## 分发：bundle + boot 行
+## 分发：bundle + host 行 + 客户端插件
 
-包声明 `dsh.bundle.patch` → `cordis.patch.yml`，后者注入宿主行 `@carljia/omd-dsh/boot`。该行在 profile 启动时执行与 `omd-dsh sync` 相同的内核（`lib/sync.js`）：渲染并复制 7 个 preset 与 `.omd-vendor/` 行模块、首次生成 `omd-matrix.json`。全程幂等、hash 保护、不覆盖本地修改。
+包声明 `dsh.bundle.patch` → `cordis.patch.yml`，后者注入宿主行 `@carljia/omd-dsh`（包根，`lib/host.js`）。该行在 profile 启动时执行与 `omd-dsh sync` 相同的内核（`lib/sync.js`）并额外注册 settings 命名空间（见下节「设置页与数据流」）。**注入名必须是包根而不是 `/boot` 子路径**：`dsh-client-modules` 按 loader entry 的 `options.name` == 包名来发现客户端插件（读取 `dsh.client` 与 `exports["./client"]`），浏览器 half（`lib/client.js`，见下）由此被发现。`lib/boot.js` 保留为无 settings 场景的手动回退行，仍可通过 `@carljia/omd-dsh/boot` 挂载。
 
 `.omd-vendor/` 里的行模块是**自包含 bundle**（`scripts/postbuild.mjs` 用 esbuild 把 schemastery / dsh-tools / dsh-llm / dsh-subagent 全部打进模块，唯一的例外是 `shared.js`——omd-mode 与 omd-task 共享的按 agent 键控状态，作为相对兄弟模块保持单一实例）。行模块不含任何 `@deepseek-ai/*` 导入，因此 sync **不需要知道 harness 装在哪里**，也不会出现"导入指向的树与运行进程不一致"导致的挂载失败——无论 DSH 从 npx 缓存、全局 npm 还是 profile bundles 加载 agent 机制都能工作。preset 组合里其余裸包名行（如 `@deepseek-ai/dsh-persona`）由 harness 的 loader 在运行时按宿主 base 解析。
+
+## 设置页「omd模型分配」与数据流
+
+设置 → 左侧导航 →「omd模型分配」（en: OMD model allocation）可视化编辑 7 个模式的模型矩阵（顶层 provider/model + 可选 reasoningEffort；有 tier 的模式逐档展示 provider/model，tier 的 `hint` 只读展示便于理解档位用途）。保存后**新会话**按新矩阵路由模型，运行中的会话保持创建时的组合。
+
+数据流（详见 docs/ARCHITECTURE.md「settings 命名空间数据流」）：
+
+- `settings.yaml` 的命名空间 `omd-model-allocation` 是**在线编辑的权威存储**（宿主行注册，`base` = 随包默认矩阵 `omd-matrix.default.json`，`applies: "live"`）。
+- 启动时宿主行**调和一次**：若 `<DSH_HOME>/omd-matrix.json` 存在且与命名空间解析值不同，把文件内容 `replace` 进命名空间——旧版/CLI 的自定义不丢，CLI 手改在下次重启被采纳。
+- 用命名空间解析出的完整矩阵渲染 presets，并写回 `omd-matrix.json`（**导出镜像 + CLI 兼容面**）。
+- 监听命名空间：UI 每次保存 → 重新渲染 presets + 更新镜像文件。保存走 `settings.replace`，携带 `expectedRevision`，冲突（`settings-rejected`）时拒绝并重载最新值。
+- `omd-dsh setup` / `omd-dsh sync` CLI 保持不变（读写 `omd-matrix.json`）；宿主运行中直接改文件不会实时生效，与「运行中会话不变、新会话重新 sync」的既有语义一致。
+- 边界：settings.yaml 中该段损坏 → 宿主回退纯文件 sync（老 boot 行为），不阻断启动；`omd-matrix.json` 缺失/损坏 → 用命名空间（默认矩阵）渲染并重建镜像；远程浏览器（非 loopback）→ 设置页只读/不可用；settings 只读 → 客户端禁用保存、宿主仍按解析值渲染。
 
 ## 行：omd-mode
 
@@ -59,19 +72,24 @@ omd-dsh <command> [--dry-run]
 
 细节见 docs/ARCHITECTURE.md 的「vendored 分发与自包含 bundle」。
 
-## 集中配置：<DSH_HOME>/omd-matrix.json
+## 集中配置：<DSH_HOME>/omd-matrix.json 与 settings.yaml 命名空间
 
-所有模式的模型路由（provider/model/reasoningEffort）与 omd_task 各 tier 的模型集中在用户矩阵 `<DSH_HOME>/omd-matrix.json`（默认 `~/.dsh/omd-matrix.json`）：`omd-dsh sync` 首次运行把随包的 deepseek 默认矩阵 `omd-matrix.default.json` 复制为默认配置（或从旧版本包内位置迁移一次），`omd-dsh setup` 更新它，`omd-dsh sync` 读取它并渲染进各 preset。仓库与 npm 包只携带默认矩阵文件，**不含任何个人模型配置**——个人模型配置只留在本机。preset 里 `# [omd-dsh:mode:start] / [omd-dsh:mode:end]` 与 `# [omd-dsh:task:start] / [omd-dsh:task:end]` 之间的区域是自动生成的——改模型请改矩阵后跑 sync，不要手改 fence 之间的内容。
+所有模式的模型路由（provider/model/reasoningEffort）与 omd_task 各 tier 的模型集中在用户矩阵里。两种入口，同一份数据：
+
+- **在线编辑（推荐）**：设置 →「omd模型分配」。保存写入 `settings.yaml` 的 `omd-model-allocation` 命名空间，宿主立即重渲染 presets 并把矩阵镜像回 `<DSH_HOME>/omd-matrix.json`。
+- **CLI**：`omd-dsh setup`（交互向导）/ 手改 `omd-matrix.json` 后 `omd-dsh sync`。宿主运行中直接改文件不会实时生效；下次重启时宿主把文件导入命名空间（与「新会话重新 sync」语义一致）。
+
+`omd-dsh sync` 首次运行把随包的 deepseek 默认矩阵 `omd-matrix.default.json` 复制为默认配置（或从旧版本包内位置迁移一次）。仓库与 npm 包只携带默认矩阵文件，**不含任何个人模型配置**——个人模型配置只留在本机（`~/.dsh/settings.yaml` 或 `~/.dsh/omd-matrix.json`）。preset 里 `# [omd-dsh:mode:start] / [omd-dsh:mode:end]` 与 `# [omd-dsh:task:start] / [omd-dsh:task:end]` 之间的区域是自动生成的——改模型请走设置页或矩阵后跑 sync，不要手改 fence 之间的内容。
 
 ## 开发
 
 ```bash
-npm install     # 触发 build（tsc + esbuild 打包自包含 bundle）
+npm install     # 触发 build（tsc + esbuild 打包自包含 bundle + 客户端 bundle）
 npm test        # vitest 全量测试
 npm pack        # prepack 自动重建，产出 tgz
 ```
 
-测试桩在 test/stubs/（dsh-tools/dsh-subagent 的轻量替身），不依赖真实 harness。
+构建产出：`lib/host.js`（宿主行）、`lib/client.js`（客户端 bundle，`window.__ModuleLoader__.load` 信封 + esbuild CJS，仅外部依赖 react）、`lib/vendor/*.mjs`（自包含行 bundle）。测试桩在 test/stubs/（dsh-tools/dsh-subagent 的轻量替身），不依赖真实 harness；`test/sync.test.ts` / `test/host.test.ts` / `test/client-store.test.ts` 覆盖矩阵注入渲染、启动调和判定与客户端保存状态机。
 
 
 ### 子代理透传语义

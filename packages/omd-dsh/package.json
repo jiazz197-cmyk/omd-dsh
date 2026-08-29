@@ -1,6 +1,6 @@
 {
   "name": "@carljia/omd-dsh",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "OMD 理念的 DeepSeek Harness 插件：模式能力边界 + 按模式配模型 + tier 差异化子代理委派",
   "keywords": [
     "deepseek-harness",
@@ -24,10 +24,14 @@
     "node": ">=20"
   },
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "lib/host.js",
+  "types": "lib/host.d.ts",
   "exports": {
     ".": {
+      "types": "./lib/host.d.ts",
+      "default": "./lib/host.js"
+    },
+    "./omd-mode": {
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
@@ -39,6 +43,7 @@
       "types": "./lib/boot.d.ts",
       "default": "./lib/boot.js"
     },
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -47,6 +52,10 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
     }
   },
   "files": [
@@ -62,15 +71,21 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-llm": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-scope": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-settings": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-subagent": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-system-prompt": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-tools": "^0.1.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-settings": "^0.1.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
     "@types/node": "^24.0.0",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
     "esbuild": "^0.28.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   },

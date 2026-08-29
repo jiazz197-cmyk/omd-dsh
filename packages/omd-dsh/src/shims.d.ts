@@ -18,3 +18,7 @@ declare module "@deepseek-ai/dsh-subagent" {
 declare module "@deepseek-ai/dsh-llm" {
   export function createUserMessage(input: any): any;
 }
+
+declare module "@deepseek-ai/dsh-settings" {
+  export function settingsNamespace(value: string): any;
+}

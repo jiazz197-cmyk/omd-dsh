@@ -5,10 +5,15 @@
 ```
 subagent_router/
 └── packages/omd-dsh/                 # npm 插件包 @carljia/omd-dsh
+    ├── src/host.ts                   # 宿主行（包根）：settings 命名空间 + 调和 + 渲染
     ├── src/index.ts                  # omd-mode 行：按模式固定模型路由
     ├── src/task.ts                   # omd-task 行：tier 差异化子代理委派
-    ├── src/cli.ts                    # omd-dsh sync：vendored 分发 + harness 锚定
+    ├── src/client.tsx                # 浏览器 half：设置页「omd模型分配」
+    ├── src/omd-matrix-controller.ts  # 客户端编辑状态机（无 React，可单测）
+    ├── src/cli.ts                    # omd-dsh sync/setup/models CLI
     ├── presets/omd-{7 模式}/          # agent.cordis.yml + preset.yml
+    ├── lib/host.js                   # 宿主行构建产物
+    ├── lib/client.js                 # 客户端 bundle（信封 + esbuild CJS，仅外部依赖 react）
     └── lib/vendor/omd-{mode,task}.mjs # 构建产物（esbuild 自包含 bundle，sync 原样落盘）
 ```
 
@@ -135,7 +140,34 @@ OMD 的 team mode（lead + members、共享任务表、mailbox）在 DSH 的对�
 - 新上下文迭代 = ralph 工具（fresh-agent rounds）；
 - 共享工作区 = 子代理会话与文件系统。
 
-v2 方向：/omd 切换命令（host 层 commands registry，需要 bundle patch）、Settings 页 live 编辑模式模型（settings namespace）。
+v2 方向：/omd 切换命令（host 层 commands registry，需要 bundle patch）。设置页 live 编辑模式模型（settings namespace）已在 v0.1.9 实现，见下节。
+
+## settings 命名空间数据流（「omd模型分配」设置页）
+
+**权威存储**：`settings.yaml` 的命名空间 `omd-model-allocation`（宿主行 `lib/host.js` 注册，`base` = 随包默认矩阵 `omd-matrix.default.json`，`applies: "live"`——保存后新会话即生效）。`omd-matrix.json` 降级为**导出镜像 + CLI 兼容面**（`omd-dsh setup`/`sync` 继续读写它）。
+
+```
+启动（宿主行 apply）
+  settings.register(NS, MatrixSchema, { base: 默认矩阵, applies: "live" })
+    └─ 调和（一次）：readMatrixFileIfExists() 与 scope.get() 不同 → scope.replace(file)
+       （CLI/旧版自定义导入命名空间；CLI 手改在下次重启被采纳）
+  resolved = scope.get() → saveMatrix(resolved)（镜像）→ runSyncWithMatrix(resolved)
+  scope.watch(next => saveMatrix(next) + runSyncWithMatrix(next))   ← UI 每次保存触发
+
+UI 保存（浏览器 half lib/client.js）
+  api.settings.replace({ ns, section: 完整矩阵 draft, expectedRevision: scope.revision })
+    ├─ ok           → mirror 经 settings/document-updated 自动重载；宿主 watch 重渲染 presets
+    └─ settings-rejected（冲突/校验失败）→ 展示错误 + describe.load() 重载最新值
+```
+
+关键点：
+
+- **包根注入名**：`cordis.patch.yml` 注入的行名是 `@carljia/omd-dsh`（包根）而不是 `/boot` 子路径——`dsh-client-modules` 按 loader entry `options.name` == 包名发现客户端插件（读 `dsh.client.platform === "web"` 与 `exports["./client"]`），浏览器 half 由此被加载。客户端 bundle（`lib/client.js`）是 `window.__ModuleLoader__.load({ id: 包名, factory })` 信封 + esbuild CJS（仅外部依赖 `react`，其余全部来自 cordis 服务注入：slots/locale/connection/settingsScope——客户端 bundle 纯度门禁禁止跨插件值导入）。
+- **schema**：`MatrixSchema`（schemastery，与 `omd-matrix.json` 对齐）所有字段可选，`base` 补齐；未知键透传（schemastery object 非 strict）。settings.yaml 段损坏 → register 抛错 → 宿主 catch 回退纯文件 sync（老 boot 行为），不阻断启动。
+- **客户端校验**：`settingsScope.bind({ namespace })` 无 decode 时用 wire schema（`settings.describe` 下发的 `schema.toJSON()`）校验解析值，校验失败则 status 停在 loading（页面显示加载中，不渲染半截数据）。
+- **并发**：客户端带 `expectedRevision`，冲突时宿主 `SettingsConflictError`（code `SETTINGS_CONFLICT`，wire 映射为 `settings-rejected`）拒绝写入；UI 提示并重载。镜像写回失败只记日志——下次启动会从 settings.yaml 重新渲染并重建镜像。
+- **运行中会话**：保存后仅新会话按新矩阵（preset 组合在会话创建时挂载，与现有语义一致）。远程浏览器（非 loopback）settings RPC 仅进程内 → 设置页显示不可用/只读。
+- **宿主行与 boot 行的关系**：`lib/boot.js`（`/boot` 子路径）保留为无 settings 场景的手动回退行；`lib/host.js` 是包根默认行（`main`），两者共用 `runSync` / `runSyncWithMatrix` 内核。
 
 
 ## omd-mode 与子代理的优先级（差异化委派的关键）

@@ -78,3 +78,41 @@ for (const [src, dest] of rows) {
 // both bundles resolve the SAME module instance (same file URL).
 await fs.copyFile(join(root, "lib", "shared.js"), join(outDir, "shared.js"));
 console.log("postbuild: self-contained bundles written to lib/vendor/ (omd-mode.mjs, omd-task.mjs, omd-ulw.mjs, omd-plan.mjs, omd-start-work.mjs, omd-mode-switch.mjs, shared.js)");
+
+// ── client bundle (lib/client.js) ──
+// The browser half is a CJS bundle that ONLY requires "react" externally;
+// everything else comes from cordis services injected at runtime (slots /
+// locale / connection / settingsScope). The bundle is wrapped in the DSH
+// client bundle envelope so `window.__ModuleLoader__.load` registers it
+// under the package name (the entry id dsh-client-modules composes).
+const clientOut = join(root, "lib", ".client-bundle.js");
+await build({
+  entryPoints: [join(root, "src", "client.tsx")],
+  bundle: true,
+  format: "cjs",
+  platform: "browser",
+  target: "es2020",
+  jsx: "transform",
+  jsxFactory: "React.createElement",
+  jsxFragment: "React.Fragment",
+  external: ["react"],
+  outfile: clientOut,
+  logLevel: "silent",
+});
+const bundleText = await fs.readFile(clientOut, "utf8");
+const envelope = [
+  "window.__ModuleLoader__.load({",
+  "\tid: \"@carljia/omd-dsh\",",
+  "\tfactory: (require) => {",
+  "\t\tvar module = { exports: {} };",
+  "\t\tvar exports = module.exports;",
+  "\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: \"Module\" });",
+  bundleText,
+  "\t\treturn module.exports;",
+  "\t}",
+  "});",
+  "",
+].join("\n");
+await fs.writeFile(join(root, "lib", "client.js"), envelope, "utf8");
+await fs.rm(clientOut, { force: true });
+console.log("postbuild: client bundle written to lib/client.js (envelope id @carljia/omd-dsh, external: react)");

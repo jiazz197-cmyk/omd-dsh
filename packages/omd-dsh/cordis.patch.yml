@@ -1,10 +1,17 @@
-# omd-dsh bundle patch: inject the boot row that, on startup, materializes
-# the 7 OMD agent presets into the user preset root (<DSH_HOME>/.agent-presets).
+# omd-dsh bundle patch: inject the host row under the PACKAGE ROOT name.
 #
-# The boot row (lib/boot.js) resolves the harness tree, copies the presets and
-# the vendored row modules, rewrites their @deepseek-ai/* imports to the harness,
-# and generates the model matrix on first run — idempotently. Install with:
+# The row (lib/host.js) registers the `omd-model-allocation` settings
+# namespace (settings.yaml = online-edit source), imports CLI/legacy edits
+# from <DSH_HOME>/omd-matrix.json once at startup, renders the 7 OMD presets
+# from the resolved matrix, mirrors the matrix back to omd-matrix.json, and
+# re-renders + re-mirrors on every UI save.
+#
+# The entry name MUST be the bare package name `@carljia/omd-dsh`, not a
+# subpath: dsh-client-modules discovers client plugins by matching loader
+# entry names against package names (reading dsh.client + exports["./client"]),
+# and the browser half (lib/client.js) provides the "omd模型分配" settings
+# section. Install with:
 #   dsh plugin --profile web add @carljia/omd-dsh   # then restart dsh.
 - insert:
     - id: omd-dsh
-      name: '@carljia/omd-dsh/boot'
+      name: '@carljia/omd-dsh'

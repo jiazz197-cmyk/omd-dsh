@@ -38,7 +38,7 @@ omd-dsh **不重复造轮子**，它是一层很薄的「接线 + 组织」：�
 | `omd-librarian` | 文献研究 | 只读 |
 | `omd-chat` | 纯对话 | 无 fs / shell |
 
-各模式的模型集中在 **`~/.dsh/omd-matrix.json`**（首次 `omd-dsh sync` 自动从随包的 deepseek 默认矩阵生成），可用 `omd-dsh setup` 逐项改。
+各模式的模型集中在**模型矩阵**里：设置页「omd模型分配」（可视化编辑，写入 `~/.dsh/settings.yaml` 的 `omd-model-allocation` 命名空间）或 CLI `omd-dsh setup` / 手改 `~/.dsh/omd-matrix.json`。首次 `omd-dsh sync` 自动从随包的 deepseek 默认矩阵生成个人矩阵。
 
 ## 安装
 
@@ -50,9 +50,9 @@ omd-dsh **不重复造轮子**，它是一层很薄的「接线 + 组织」：�
 dsh plugin --profile web add @carljia/omd-dsh
 ```
 
-装完**重启 `dsh web`**：插件在启动时自动把 7 个模式写入 `~/.dsh/.agent-presets` 并生成模型矩阵，preset 选择器里直接就能选，无需再手动 `omd-dsh sync`。
+装完**重启 `dsh web`**：插件在启动时自动把 7 个模式写入 `~/.dsh/.agent-presets` 并生成模型矩阵，preset 选择器里直接就能选，设置面板出现「omd模型分配」页（可视化编辑模型矩阵，保存后新会话生效），无需再手动 `omd-dsh sync`。
 
-> `dsh plugin` 本质是转发给 pnpm（即从 npm 装包）。本插件声明了 `dsh.bundle`，因此会被自动登记为 profile 层并在启动时生效（boot 行做幂等同步；行模块是自包含 bundle，不依赖任何 harness 路径）。
+> `dsh plugin` 本质是转发给 pnpm（即从 npm 装包）。本插件声明了 `dsh.bundle`，因此会被自动登记为 profile 层并在启动时生效（宿主行做幂等同步 + settings 命名空间注册；行模块是自包含 bundle，不依赖任何 harness 路径）。
 
 ### 方式二：npm 全局安装
 
@@ -72,11 +72,11 @@ npm link        # 全局 omd-dsh 命令
 
 ## 使用
 
-> **安装后即可用**：`dsh plugin add` 装完重启，7 个模式会自动出现（启动时已同步）。用 `npm i -g` 安装的，先跑一次 `omd-dsh sync` 再重启 `dsh web`。改模型用 `omd-dsh setup`。
+> **安装后即可用**：`dsh plugin add` 装完重启，7 个模式会自动出现（启动时已同步）。用 `npm i -g` 安装的，先跑一次 `omd-dsh sync` 再重启 `dsh web`。改模型推荐用设置页「omd模型分配」（保存后新会话生效），CLI 如下：
 
 ```bash
 omd-dsh sync    # 手动把 7 个模式写入 ~/.dsh/.agent-presets（bundle 安装时启动已自动执行）
-omd-dsh setup   # 交互式：逐模式 / 逐 tier 选模型，再同步
+omd-dsh setup   # 交互式：逐模式 / 逐 tier 选模型，再同步（CLI 手改在下次重启被宿主导入）
 omd-dsh models  # 列出发现的模型
 ```
 
@@ -132,9 +132,14 @@ omd-dsh models  # 列出发现的模型
 
 ## 改模型
 
-模型矩阵保存在 **`~/.dsh/omd-matrix.json`**（DSH_HOME 下）：首次 `omd-dsh sync` 会把随包发布的 **deepseek 默认矩阵**（`omd-matrix.default.json`）自动复制为你的默认配置（个人模型配置只留在本机，不进 git/npm）；此后跑 `omd-dsh setup` 逐项改，或直接编辑该文件后 `omd-dsh sync`。每次 sync 输出都会提醒可用 `omd-dsh setup` 自定义模型矩阵。
+模型矩阵有两个入口，同一份数据：
 
-> ⚠️ preset 里 `# [omd-dsh:mode:start]` … `# [omd-dsh:mode:end]` 之间的区域是自动生成的，**不要手改**——改模型请改矩阵后跑 sync。
+1. **设置页「omd模型分配」（推荐）**：设置 → 左侧导航 →「omd模型分配」，可视化编辑 7 个模式的 provider/model（含可选 reasoningEffort）与各 tier 的 provider/model（tier 的 `hint` 只读展示）。保存后写入 `~/.dsh/settings.yaml` 的 `omd-model-allocation` 命名空间，宿主立即重渲染 presets 并把矩阵镜像回 `~/.dsh/omd-matrix.json`；**新会话**按新矩阵路由，运行中的会话保持不变。
+2. **CLI / 文件**：`omd-dsh setup` 逐项改，或直接编辑 `~/.dsh/omd-matrix.json` 后 `omd-dsh sync`。宿主运行中直接改文件不会实时生效；下次重启时宿主把文件内容导入命名空间（CLI 与旧版自定义不丢）。
+
+首次 `omd-dsh sync` 会把随包发布的 **deepseek 默认矩阵**（`omd-matrix.default.json`）自动复制为你的默认配置（个人模型配置只留在本机，不进 git/npm）。设置页「恢复默认」一键回到该默认矩阵。
+
+> ⚠️ preset 里 `# [omd-dsh:mode:start]` … `# [omd-dsh:mode:end]` 之间的区域是自动生成的，**不要手改**——改模型请走设置页或矩阵后跑 sync。
 
 ## License
 

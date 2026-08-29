@@ -3,14 +3,22 @@ import { createHash } from "node:crypto";
 import { dirname, join, relative, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
+import z from "@deepseek-ai/schemastery";
 
 /**
  * omd-dsh sync core — materialize the OMD presets into <DSH_HOME>/.agent-presets.
  *
- * Shared by the CLI (`omd-dsh sync`) and the bundle boot row (`dsh plugin add`
- * + restart): render each preset's omd-mode / omd-task rows from the user's
- * model matrix, and copy the presets plus the vendored row modules into
- * .agent-presets.
+ * Shared by the CLI (`omd-dsh sync`), the bundle boot row (`dsh plugin add`
+ * + restart), and the host settings row (lib/host.js): render each preset's
+ * omd-mode / omd-task rows from the model matrix, and copy the presets plus
+ * the vendored row modules into .agent-presets.
+ *
+ * The matrix has two faces: `runSync` reads/writes the CLI face
+ * (<DSH_HOME>/omd-matrix.json, the `omd-dsh setup` target), while the host
+ * settings row resolves the matrix from the settings namespace
+ * (`omd-model-allocation` in settings.yaml) and feeds it to
+ * `runSyncWithMatrix` — the file becomes an exported mirror of the namespace
+ * plus the CLI compatibility face (see src/host.ts).
  *
  * The vendored rows are SELF-CONTAINED bundles (see scripts/postbuild.mjs):
  * every dependency is bundled in and they carry no @deepseek-ai imports, so
@@ -62,6 +70,33 @@ async function collectSourceFiles(rootDir: string) {
 // ── matrix ──
 const DEFAULT_MATRIX_PATH = join(PACKAGE_ROOT, "omd-matrix.default.json");
 
+/** Settings-namespace schema for the model matrix (see plan §5). Every field
+ *  is optional: `base` (the shipped default matrix) fills whatever the user
+ *  document omits, and extra keys (future fields) pass through untouched. */
+const TierSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  hint: z.string(),
+  persona: z.string(),
+  maxTokens: z.number(),
+  toolFilter: z.object({
+    allow: z.array(z.string()),
+    deny: z.array(z.string()),
+    denyShell: z.boolean(),
+  }),
+});
+const ModeSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  reasoningEffort: z.string(),
+  tiers: z.dict(TierSchema),
+});
+export const MatrixSchema = z.object({
+  version: z.number(),
+  defaults: z.object({ provider: z.string() }),
+  modes: z.dict(ModeSchema),
+});
+
 function parseMatrix(text: string): Matrix | undefined {
   try {
     const parsed = JSON.parse(text);
@@ -70,11 +105,32 @@ function parseMatrix(text: string): Matrix | undefined {
   return undefined;
 }
 
-function readDefaultMatrix(): Matrix {
+export function readDefaultMatrix(): Matrix {
   if (!existsSync(DEFAULT_MATRIX_PATH)) throw new Error("omd-dsh: missing default matrix file " + DEFAULT_MATRIX_PATH + " (broken package — reinstall @carljia/omd-dsh)");
   const parsed = parseMatrix(readFileSync(DEFAULT_MATRIX_PATH, "utf8"));
   if (parsed === undefined) throw new Error("omd-dsh: malformed default matrix file " + DEFAULT_MATRIX_PATH + " (broken package — reinstall @carljia/omd-dsh)");
   return parsed;
+}
+
+/**
+ * Read the user's matrix file (<DSH_HOME>/omd-matrix.json) without touching
+ * the filesystem beyond the read: missing or malformed returns undefined and
+ * NEVER auto-generates — the caller decides what to fall back to (settings
+ * namespace resolved value / default matrix). This is the host row's
+ * "import CLI / legacy edits into the settings namespace" read.
+ */
+export function readMatrixFileIfExists(): Matrix | undefined {
+  if (!existsSync(MATRIX_PATH)) return undefined;
+  try {
+    return parseMatrix(readFileSync(MATRIX_PATH, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Structural equality over the small JSON matrix (stringify equality suffices). */
+export function matrixEquals(a: Matrix, b: Matrix): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function writeMatrixFile(path: string, text: string) {
@@ -193,8 +249,13 @@ async function locallyModified(dir: string, meta: { files?: Record<string, any> 
   return undefined;
 }
 
-export async function runSync(flags: SyncFlags, log: (msg: string) => void = console.log): Promise<void> {
-  const matrix = loadMatrix(flags, log);
+/**
+ * Render and materialize the presets from an ALREADY-RESOLVED matrix. This is
+ * the shared core between the CLI file path (`runSync`) and the settings
+ * namespace path (host row): the matrix comes from the caller, everything
+ * after `loadMatrix(...)` is here.
+ */
+export async function runSyncWithMatrix(matrix: Matrix, flags: SyncFlags, log: (msg: string) => void = console.log): Promise<void> {
   const manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, "package.json"), "utf8"));
   const sourceVersion = manifest.version;
   const presetsSourceDir = join(PACKAGE_ROOT, "presets");
@@ -302,4 +363,9 @@ export async function runSync(flags: SyncFlags, log: (msg: string) => void = con
   for (const key of ["synced", "updated", "skipped", "conflicts", "orphan", "removed"]) for (const line of report[key]) log("  [" + key + "] " + line);
   const summary = ["synced", "updated", "conflicts", "orphan", "removed"].map((key) => report[key].length + " " + key).join(", ");
   log("omd-dsh sync: " + summary + (flags.dryRun ? " (dry-run)" : ""));
+}
+
+/** CLI / manual-fallback path: load the matrix from <DSH_HOME>/omd-matrix.json (generating/migrating it on first run), then render. */
+export async function runSync(flags: SyncFlags, log: (msg: string) => void = console.log): Promise<void> {
+  await runSyncWithMatrix(loadMatrix(flags, log), flags, log);
 }

@@ -11,6 +11,8 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "jsx": "react",
+    "jsxFactory": "React.createElement",
     "types": [
       "node"
     ]
